@@ -1,0 +1,26 @@
+node_modules/
+coverage/
+*.log
+*.tgz
+
+# dist/ is not ignored: it is the bundle Antigravity runs, committed (see .gitattributes).
+
+# Only the plugin's own skill is published: Antigravity loads every skill under skills/, so anything
+# else there is a person's own.
+skills/*
+!skills/telmoni-observability/
+
+# Environment: a key never belongs in the repository.
+.env
+.env.*
+
+# A person's own agent settings; `.antigravity-plugin/` is the published manifest.
+.agents/
+.claude/
+.gemini/
+
+# Editor and OS
+.vscode/
+.idea/
+.zed/
+.DS_Store

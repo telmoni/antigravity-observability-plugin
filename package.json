@@ -1,0 +1,33 @@
+{
+  "name": "antigravity-observability-plugin",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Telmoni's Antigravity plugin: each turn of an Antigravity session recorded as a run, metadata unless you turn content on.",
+  "license": "Apache-2.0",
+  "homepage": "https://telmoni.com/docs/api/coding-agents",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/telmoni/antigravity-observability-plugin.git"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "validate": "agy plugin validate --strict .",
+    "format": "prettier --write src tests",
+    "format:check": "prettier --check src tests",
+    "verify": "npm run format:check && npm run typecheck && npm run build && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "prettier": "^3.9.10",
+    "telmoni": "file:../telmoni/sdk/typescript",
+    "tsup": "^9.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}

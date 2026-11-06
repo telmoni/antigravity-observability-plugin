@@ -1,0 +1,11 @@
+{
+  "telmoni-observability": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node ./dist/hook.mjs",
+        "timeout": 10
+      }
+    ]
+  }
+}

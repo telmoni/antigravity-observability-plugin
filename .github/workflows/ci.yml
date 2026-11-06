@@ -1,0 +1,89 @@
+# The gates on every push and pull request: the type-check, the build and the bundle in
+# dist/ as the build makes it, the suite on the oldest and the newest Node the hook runs
+# on, and these workflows under actionlint. Until the SDK's next release is on npm, the
+# SDK is the core's checkout beside this one, at the commit TELMONI_REF names: the one
+# whose SDK the committed dist/ bundles, bumped with it.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TELMONI_REF: b75807f7e582fbe95f55ed1b74c19041078e42d2
+
+jobs:
+  test:
+    name: Build and tests on Node ${{ matrix.node }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22.23.4", "26.13.0"]
+    defaults:
+      run:
+        working-directory: antigravity-observability-plugin
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: antigravity-observability-plugin
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: telmoni/telmoni
+          ref: ${{ env.TELMONI_REF }}
+          path: telmoni
+          sparse-checkout: sdk/typescript
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Build the SDK the bundle holds
+        working-directory: telmoni/sdk/typescript
+        run: npm ci && npm run build
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run typecheck
+      - name: The committed dist/ is what the build makes
+        run: |
+          npm run build
+          git diff --exit-code -- dist
+          if [ -n "$(git status --porcelain -- dist)" ]; then
+            git status --porcelain -- dist
+            echo "::error::dist/ holds files the build no longer makes, or lacks ones it does: run npm run build and commit dist/"
+            exit 1
+          fi
+      - run: npm test
+
+  lint-workflows:
+    name: The workflows under actionlint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install actionlint
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          set -euo pipefail
+          tarball="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "$tarball" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${tarball}"
+          echo "${ACTIONLINT_SHA256}  ${tarball}" | sha256sum --check --status
+          tar -xzf "$tarball" actionlint
+      - run: ./actionlint -color

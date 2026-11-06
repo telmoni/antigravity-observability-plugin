@@ -1,0 +1,22 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "telmoni-observability",
+  "displayName": "Telmoni Observability",
+  "version": "0.0.0",
+  "description": "Records each turn of your Antigravity sessions in Telmoni as a run: its models, tokens, tools and times. Your prompts stay home unless you turn content on.",
+  "logo": "assets/logo.png",
+  "suggestedPrompts": [
+    "Help me connect Telmoni to record my Antigravity sessions",
+    "Tag this workspace's Telmoni runs with its repo and branch",
+    "Why aren't my Antigravity sessions showing up in Telmoni?"
+  ],
+  "author": {
+    "name": "Telmoni",
+    "email": "hello@telmoni.com",
+    "url": "https://telmoni.com"
+  },
+  "homepage": "https://telmoni.com/docs/api/coding-agents",
+  "repository": "https://github.com/telmoni/antigravity-observability-plugin",
+  "license": "Apache-2.0",
+  "keywords": ["observability", "monitoring", "telemetry", "tracing"]
+}

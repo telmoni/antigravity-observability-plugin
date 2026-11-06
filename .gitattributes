@@ -1,0 +1,3 @@
+# dist/ is the build of src/ and the lockfile, committed because Antigravity builds nothing:
+# kept out of diffs, and collapsed in pull requests. CI fails on any difference all the same.
+dist/** -diff linguist-generated=true
