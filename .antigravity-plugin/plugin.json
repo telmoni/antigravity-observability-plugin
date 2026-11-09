@@ -3,7 +3,7 @@
   "name": "telmoni-observability",
   "displayName": "Telmoni Observability",
   "version": "0.0.0",
-  "description": "Records each turn of your Antigravity sessions in Telmoni as a run: its models, tokens, tools and times. Your prompts stay home unless you turn content on.",
+  "description": "Records each turn of an Antigravity session in Telmoni as a run: its models, tokens, tools and times. Prompts stay in your process unless you turn content on.",
   "logo": "assets/logo.png",
   "suggestedPrompts": [
     "Help me connect Telmoni to record my Antigravity sessions",

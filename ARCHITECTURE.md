@@ -202,7 +202,7 @@ Past 200 kept runs the oldest go, and the log says how many. A key or endpoint c
 
 ## Shared code
 
-`src/shared/` holds copies of the SDK's coding-agent module (`telmoni/telmoni` `sdk/typescript/src/coding-agent/` at `95db29c9`): `settings`, `log`, `state`, `send` and `tags`. They are shared with the other Telmoni plugins and changed only in their imports. The SDK does not export the module yet; once it does, the copies go and the plugin imports it.
+`src/shared/` holds copies of the SDK's coding-agent module (`telmoni/telmoni` `sdk/typescript/src/coding-agent/` at `95db29c9`): `settings`, `log`, `state`, `send` and `tags`. They are the Codex plugin's copies, byte for byte, changed from the SDK's only in their imports and Prettier's line width. The SDK does not export the module yet; once it does, the copies go and the plugin imports it.
 
 ## Build and the SDK
 
@@ -261,7 +261,7 @@ Each suite proves its module:
 CI (`.github/workflows/ci.yml`) runs on every push to `main` and every pull request:
 
 - it checks out the core at a pinned commit beside this repository and builds its SDK;
-- it runs the type-check, the build and a check that the committed `dist/` is what the build makes, on Node 22.23.4 and 26.13.0. These are exact versions, the pins the Claude Code plugin and the cloud's patching table use, since a bare major takes the runner's cached build, days behind a fix;
+- it runs the type-check, the build and a check that the committed `dist/` is what the build makes, on Node 22.23.4 and 26.13.0. These are exact versions, the pins the Claude Code and Codex plugins use, since a bare major takes the runner's cached build, days behind a fix;
 - it runs the suite;
 - it checks the workflows under actionlint.
 
@@ -284,11 +284,11 @@ A Marketplace listing is a partner intake form, sent once `agy plugin validate -
 
 ## Decisions
 
-- **TypeScript, bundled, `dist/` committed**, as for the other Telmoni plugins since npm was left. Antigravity copies a plugin as it finds it and builds nothing; Node runs the bundle on every platform, through `sh` and through `cmd`. The cost: Node 22 or later on the `PATH`.
+- **TypeScript, bundled, `dist/` committed**, as for the other Telmoni plugins. Antigravity copies a plugin as it finds it and builds nothing; Node runs the bundle on every platform, through `sh` and through `cmd`. The cost: Node 22 or later on the `PATH`.
 - **The transcript, not the hooks, as the source.** Only `Stop` is registered. `PreInvocation`, `PostInvocation` and `PostToolUse` would each start a Node process the agent's loop waits on, at every model call and tool. The transcript holds every step, its time and its tokens. The cost: reading a format Antigravity owns and can move.
 - **A detached worker.** Antigravity waits on a hook before the turn ends. The sending, which may wait on a slow Telmoni, happens where nothing waits on it. The cost: the session never hears how a send went; the log alone says.
 - **A skill for the Marketplace's prompts.** The Marketplace asks for up to three starter prompts. A plugin of hooks alone gives the agent nothing to act on for them, so the skill teaches it the plugin: what it can do for the person (a tags file, reading the log) and what it must leave to them (the key). The cost: its name and description in every session's context, and its text where a prompt calls for it.
-- **A key file in Antigravity's configuration folder.** Antigravity offers a plugin's hooks no settings and no data folder. An MCP server's `variables` would bring Antigravity's own setup form, at the cost of a server running in every session for nothing else. The file follows the other plugins': the person's own, shut to everyone else, and a folder the agent's tools may not read.
+- **A key file in Antigravity's configuration folder.** Antigravity offers a plugin's hooks no settings and no data folder. An MCP server's `variables` would bring Antigravity's own setup form, at the cost of a server running in every session for nothing else. The file follows the Codex plugin's: the person's own, shut to everyone else, and a folder the agent's tools may not read.
 - **History stays home.** A conversation first heard of is recorded from the turn that stop ended, so installing the plugin, or setting a key, never sends the past.
 - **`gcp.vertex_ai` as every model's provider.** Antigravity serves its models from Google Cloud, and Vertex AI is the provider under which the price table names each of them.
 - **The effort split from the model's name**, so the model is the one the price table names, and the effort is metadata of its own.

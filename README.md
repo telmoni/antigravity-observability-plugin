@@ -1,8 +1,8 @@
 # Telmoni for Antigravity
 
-Records each turn of your [Antigravity](https://antigravity.google) sessions in [Telmoni](https://telmoni.com) as a run: the models it called and their tokens, the tools it used and the compactions it made, each with its times and whether it failed. Nothing you or the agent said, unless you turn on **content** and the project keeps content: then each turn's conversation too.
+Records each turn of your [Antigravity](https://antigravity.google) sessions in [Telmoni](https://telmoni.com) as a run: the models it called and their tokens, the tools it used and the compactions it made, each with its times and whether it failed. Nothing you or the agent said, except the tags you set, unless you turn on **content** and the project keeps content: then each turn's conversation too.
 
-[Telmoni](https://github.com/telmoni/telmoni) is open-source monitoring for AI agents: with your sessions recorded, its [alerts](https://telmoni.com/docs/monitoring/alerts) tell you when a turn fails, loops on one tool or costs more than you set, and show you the turn that did it.
+[Telmoni](https://github.com/telmoni/telmoni) is privacy-first, open-source monitoring for AI agents: with your sessions recorded, its [alerts](https://telmoni.com/docs/monitoring/alerts) tell you when a turn fails, loops on one tool or costs more than you set, and show you the turn that did it. Prompts stay in your process unless you turn content on.
 
 ## Install
 
@@ -19,7 +19,7 @@ git clone https://github.com/telmoni/antigravity-observability-plugin.git
 agy plugin install ./antigravity-observability-plugin
 ```
 
-Antigravity copies the plugin into `~/.gemini/config/plugins/telmoni-observability/`. There is nothing to build: the hook runs the bundle committed in `dist/`, which holds the [Telmoni TypeScript SDK](https://telmoni.com/docs/api/sdks). Start a new session once the plugin is installed and the key is set (below).
+Antigravity copies the plugin into `~/.gemini/config/plugins/telmoni-observability/`. There is nothing to build: the hook runs the bundle committed in `dist/`, which holds the [Telmoni TypeScript SDK](https://github.com/telmoni/telmoni/tree/main/sdk/typescript), built from the core's `sdk/typescript` until the SDK's next release. Start a new session once the plugin is installed and the key is set (below).
 
 To update, install it again: from its address, or from your clone after `git pull`. Antigravity replaces the copy it has.
 
@@ -94,9 +94,10 @@ With content off, the plugin reads only:
 - each model call's tokens;
 - each tool call's name;
 - a command's exit code;
-- an error's code.
+- an error's code;
+- of what its hook is handed, the conversation's id, the transcript's path, the model's name, why the turn ended and whether the conversation is idle, and the first workspace folder, only to find the tags file above it.
 
-It never keeps or sends your prompt, a reply, the reasoning, a tool's arguments or output, a file's path or contents, the workspace's folders, the transcript's path, a compaction's summary or an error's message. With content on, it sends the conversation above, and still never the workspace's folders or the transcript's path, beyond what you or the agent wrote in the conversation itself.
+It never keeps or sends your prompt, a reply, the reasoning, a tool's arguments or output, a file's path or contents, the workspace's folders, the transcript's path, a compaction's summary or an error's message. With content on, it sends the conversation above, and still never the workspace's folders or the transcript's path, beyond what the conversation itself holds, a tool's output among it.
 
 ## Tags
 
@@ -128,7 +129,7 @@ To remove the plugin, run `agy plugin uninstall telmoni-observability`, then del
 
 ## Developing
 
-[ARCHITECTURE.md](ARCHITECTURE.md) says how the plugin works, and how to build and test it from a checkout. To contribute, start with Telmoni's [contributing guide](https://telmoni.com/docs/contributing/introduction).
+[ARCHITECTURE.md](ARCHITECTURE.md) says how the plugin works, and how to build and test it from a checkout. To contribute, start with Telmoni's [contributing guide](https://telmoni.com/docs/contributing/introduction). At `0.0.0` nothing is released.
 
 ## License
 
