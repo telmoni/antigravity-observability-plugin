@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  TELMONI_REF: 9a3c258e1365d1887ea788da8cc37427e3eb37d5
+  TELMONI_REF: 356be67808d32b62c66e3e677207225892cd651c
 
 jobs:
   test:

@@ -3141,8 +3141,9 @@ var PROMPT_VERSION = "gen_ai.prompt.version";
 var TIME_TO_FIRST_CHUNK = "gen_ai.response.time_to_first_chunk";
 var INPUT_TOKENS = "gen_ai.usage.input_tokens";
 var OUTPUT_TOKENS = "gen_ai.usage.output_tokens";
+var REASONING_OUTPUT_TOKENS = "gen_ai.usage.reasoning.output_tokens";
 var CACHE_READ_INPUT_TOKENS = "gen_ai.usage.cache_read.input_tokens";
-var CACHE_WRITE_INPUT_TOKENS = "gen_ai.usage.cache_write.input_tokens";
+var CACHE_CREATION_INPUT_TOKENS = "gen_ai.usage.cache_creation.input_tokens";
 var COST = "gen_ai.usage.cost";
 var SESSION_ID = "gen_ai.conversation.id";
 var DATA_SOURCE_ID = "gen_ai.data_source.id";
@@ -3740,8 +3741,9 @@ var SCORE_KEYS = /* @__PURE__ */ new Set([
 var INTEGERS = /* @__PURE__ */ new Set([
   INPUT_TOKENS,
   OUTPUT_TOKENS,
+  REASONING_OUTPUT_TOKENS,
   CACHE_READ_INPUT_TOKENS,
-  CACHE_WRITE_INPUT_TOKENS,
+  CACHE_CREATION_INPUT_TOKENS,
   RETRIEVAL_TOP_K
 ]);
 var fetchTransport = async (url, init) => {
@@ -6259,7 +6261,7 @@ var ModelCall = class extends Handle {
       input: count2(INPUT_TOKENS),
       output: count2(OUTPUT_TOKENS),
       cacheRead: count2(CACHE_READ_INPUT_TOKENS),
-      cacheWrite: count2(CACHE_WRITE_INPUT_TOKENS)
+      cacheWrite: count2(CACHE_CREATION_INPUT_TOKENS)
     };
     const reported = held[COST];
     let cost = typeof reported === "number" ? reported : priced(this.#prices, this.#provider, this.#model, tokens);
@@ -6720,6 +6722,7 @@ var USAGE_KEYS = [
   "outputTokens",
   "cacheReadInputTokens",
   "cacheWriteInputTokens",
+  "reasoningOutputTokens",
   "cost"
 ];
 function usageOf2(usage, warnOnce) {
@@ -6738,7 +6741,8 @@ function usageOf2(usage, warnOnce) {
     [INPUT_TOKENS, usage.inputTokens],
     [OUTPUT_TOKENS, usage.outputTokens],
     [CACHE_READ_INPUT_TOKENS, usage.cacheReadInputTokens],
-    [CACHE_WRITE_INPUT_TOKENS, usage.cacheWriteInputTokens]
+    [CACHE_CREATION_INPUT_TOKENS, usage.cacheWriteInputTokens],
+    [REASONING_OUTPUT_TOKENS, usage.reasoningOutputTokens]
   ]) {
     if (!isSet(value)) continue;
     const count2 = whole(value, 0, 2 ** 63);
