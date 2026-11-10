@@ -1,11 +1,11 @@
 ---
 name: telmoni-observability
-description: Connects, tags and troubleshoots the Telmoni Observability plugin, which records each turn of these Antigravity sessions in Telmoni as a run. Use when the user asks to connect or set up Telmoni, to tag this workspace's runs (for example with its repo and branch), to turn content capture or scrubbing on or off, or why their sessions are not showing up in Telmoni.
+description: Connects, tags and troubleshoots the Telmoni Observability plugin, which records each turn of these Antigravity sessions in Telmoni as a trace. Use when the user asks to connect or set up Telmoni, to tag this workspace's traces (for example with its repo and branch), to turn content capture or scrubbing on or off, or why their sessions are not showing up in Telmoni.
 ---
 
 # Telmoni Observability
 
-The plugin records each turn of the user's Antigravity sessions in Telmoni as a run. A run holds:
+The plugin records each turn of the user's Antigravity sessions in Telmoni as a trace. A trace holds:
 
 - the model calls and their tokens;
 - the tool calls, by name;
@@ -53,7 +53,7 @@ The user edits the key file themselves. Content is kept only in a project whose 
 
 ## Tag this workspace
 
-Tags label every run started in a folder. To tag the workspace, write `.telmoni-tags.json` at its root: a JSON object of strings, such as `{"repo": "telmoni", "branch": "main"}`. A file in a subfolder tags the turns started there instead; the nearest file wins.
+Tags label every trace started in a folder. To tag the workspace, write `.telmoni-tags.json` at its root: a JSON object of strings, such as `{"repo": "telmoni", "branch": "main"}`. A file in a subfolder tags the turns started there instead; the nearest file wins.
 
 - **`repo`:** the repository's name alone, the last part of `git remote get-url origin` without `.git`, else the folder's name. Never the URL, which can hold a token.
 - **`branch`:** from `git branch --show-current`. The file does not follow a branch switch, so tell the user to update it, or leave `branch` out.
@@ -64,7 +64,7 @@ Tags label every run started in a folder. To tag the workspace, write `.telmoni-
 
 Tags apply from the next turn on. Offer to add `.telmoni-tags.json` to `.gitignore` if the user does not want it committed.
 
-## When runs are not showing up
+## When traces are not showing up
 
 Work through these in order:
 
@@ -77,15 +77,15 @@ Each log line names a conversation by the first 8 characters of its id:
 
 | Line | What it means |
 |---|---|
-| `sent <run>` | Delivered. The run is in Telmoni under the agent `antigravity`. |
+| `sent <trace>` | Delivered. The trace is in Telmoni under the agent `antigravity`. |
 | `no key` | Set the key (above). |
 | `key file not read: <why>` | Fix what it says. Often `chmod 600 ~/.gemini/config/telmoni.json`, or JSON that does not parse. |
 | `endpoint refused: <why>` | The endpoint beside the key is not one the SDK sends to. |
-| `held <run>: its turn is not over yet` | A background task was still running. The turn is sent when the conversation goes idle, or at the next prompt. |
-| `kept <run>, …` | Telmoni was out of reach, busy, or refused the key. The turn is sent again as the next turn ends. If the line names `401` or `403`, the key is wrong or lacks the ingest scope. |
-| `<run> taken in part: …` | Telmoni kept the run less a span or a field it names. |
-| `<run> refused, not sent again: …` | Telmoni refused the run for good, for what it holds or the organization's standing. |
-| `tag dropped: …` or `tags file not read: …` | A tag, or the tags file, broke a rule (above). The run was sent without it. |
+| `held <trace>: its turn is not over yet` | A background task was still running. The turn is sent when the conversation goes idle, or at the next prompt. |
+| `kept <trace>, …` | Telmoni was out of reach, busy, or refused the key. The turn is sent again as the next turn ends. If the line names `401` or `403`, the key is wrong or lacks the ingest scope. |
+| `<trace> taken in part: …` | Telmoni kept the trace less a span or a field it names. |
+| `<trace> refused, not sent again: …` | Telmoni refused the trace for good, for what it holds or the organization's standing. |
+| `tag dropped: …` or `tags file not read: …` | A tag, or the tags file, broke a rule (above). The trace was sent without it. |
 | `state unreadable …` | The plugin's own file for the conversation is damaged. Moving it aside, out of `~/.gemini/config/telmoni/`, lets the conversation record again from its next turn. |
 
 No log at all means the hook never ran: go back to steps 1 to 3.

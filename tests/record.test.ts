@@ -1,7 +1,7 @@
-import type { ModelCallRecord, RunRecord, StepRecord, ToolCallRecord } from 'telmoni';
+import type { ModelCallRecord, StepRecord, ToolCallRecord, TraceRecord } from 'telmoni';
 import { describe, expect, it } from 'vitest';
 
-import { type Ending, PROVIDER, recordTurn, runIdOf } from '../src/record.js';
+import { type Ending, PROVIDER, recordTurn, traceIdOf } from '../src/record.js';
 import { readTranscript } from '../src/transcript.js';
 import { cut } from '../src/turns.js';
 import { CONVERSATION, SECRETS, T0, Transcript, assertMetadataOnly, makeHome } from './helpers.js';
@@ -9,7 +9,7 @@ import { CONVERSATION, SECRETS, T0, Transcript, assertMetadataOnly, makeHome } f
 function record(
   transcript: Transcript,
   options: { ending?: Ending; content?: boolean; model?: string; turn?: number } = {},
-): RunRecord | undefined {
+): TraceRecord | undefined {
   const content = options.content ?? false;
   const read = readTranscript(transcript.path, { content });
   if ('problem' in read) throw new Error(read.problem);
@@ -23,20 +23,20 @@ function record(
   });
 }
 
-const calls = (run: RunRecord | undefined) =>
-  (run?.inside ?? []) as Array<ModelCallRecord | ToolCallRecord | StepRecord>;
-const models = (run: RunRecord | undefined) =>
-  calls(run).filter((call): call is ModelCallRecord => call.type === 'model_call');
-const tools = (run: RunRecord | undefined) =>
-  calls(run).filter((call): call is ToolCallRecord => call.type === 'tool_call');
+const calls = (trace: TraceRecord | undefined) =>
+  (trace?.inside ?? []) as Array<ModelCallRecord | ToolCallRecord | StepRecord>;
+const models = (trace: TraceRecord | undefined) =>
+  calls(trace).filter((call): call is ModelCallRecord => call.type === 'model_call');
+const tools = (trace: TraceRecord | undefined) =>
+  calls(trace).filter((call): call is ToolCallRecord => call.type === 'tool_call');
 
-describe('a turn as a run', () => {
-  it('is a run of the agent antigravity in the conversation, from the prompt to the stop', () => {
+describe('a turn as a trace', () => {
+  it('is a trace of the agent antigravity in the conversation, from the prompt to the stop', () => {
     const transcript = new Transcript(makeHome());
     transcript.turn(['run_command']);
     const run = record(transcript, { ending: { at: T0 + 9500 } });
     expect(run).toMatchObject({
-      runId: runIdOf(CONVERSATION, 0),
+      traceId: traceIdOf(CONVERSATION, 0),
       agent: 'antigravity',
       sessionId: CONVERSATION,
       start: T0,
@@ -137,7 +137,7 @@ describe('a turn as a run', () => {
     ['MAX_INVOCATIONS', undefined, { errorType: 'max_invocations' }],
     ['ERROR', 503, { errorType: 'server_error' }],
     ['ERROR', undefined, { errorType: 'AgentError' }],
-  ])('ends a run stopped by %s as it says', (reason, code, outcome) => {
+  ])('ends a trace stopped by %s as it says', (reason, code, outcome) => {
     const transcript = new Transcript(makeHome());
     transcript.prompt();
     transcript.reply({ tools: ['run_command'] });
@@ -150,7 +150,7 @@ describe('a turn as a run', () => {
     });
   });
 
-  it('fails a run whose last call is an error where no stop said how it ended', () => {
+  it('fails a trace whose last call is an error where no stop said how it ended', () => {
     const transcript = new Transcript(makeHome());
     transcript.prompt();
     transcript.reply({ tools: ['run_command'] });
@@ -166,16 +166,15 @@ describe('a turn as a run', () => {
     expect(record(transcript)).toBeUndefined();
   });
 
-  it('is the same run however often its turn is built', () => {
+  it('is the same trace however often its turn is built', () => {
     const transcript = new Transcript(makeHome());
     transcript.turn(['run_command', 'view_file']);
     expect(JSON.stringify(record(transcript, { ending: { at: T0 + 9000 } }))).toBe(
       JSON.stringify(record(transcript, { ending: { at: T0 + 9000 } })),
     );
-    expect(runIdOf(CONVERSATION, 0)).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
-    );
-    expect(runIdOf(CONVERSATION, 0)).not.toBe(runIdOf(CONVERSATION, 5));
+    // A version 5 UUID's bytes as a trace id: 32 hex digits, no hyphens.
+    expect(traceIdOf(CONVERSATION, 0)).toMatch(/^[0-9a-f]{12}5[0-9a-f]{3}[89ab][0-9a-f]{15}$/);
+    expect(traceIdOf(CONVERSATION, 0)).not.toBe(traceIdOf(CONVERSATION, 5));
   });
 
   it('holds nothing anyone said with content off', () => {

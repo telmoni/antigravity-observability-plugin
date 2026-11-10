@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { stateDir } from '../src/paths.js';
-import { runIdOf } from '../src/record.js';
+import { traceIdOf } from '../src/record.js';
 import { TAGS_FILE } from '../src/shared/tags.js';
 import {
   CONVERSATION,
@@ -39,13 +39,13 @@ describe('the worker', () => {
     await runWorker(transcript.stop({ at: T0 + 7_500 }), home, telmoni);
 
     const spans = telmoni.spans();
-    const run = spans.find((span) => attributes(span)['gen_ai.operation.name'] === 'invoke_agent');
-    expect(run?.name).toBe('invoke_agent antigravity');
-    expect(attributes(run!)).toMatchObject({
-      'gen_ai.conversation.id': CONVERSATION,
-      'telmoni.run_id': runIdOf(CONVERSATION, 0),
-    });
-    expect([startMs(run!), endMs(run!)]).toEqual([T0, T0 + 7_500]);
+    const agent = spans.find(
+      (span) => attributes(span)['gen_ai.operation.name'] === 'invoke_agent',
+    );
+    expect(agent?.name).toBe('invoke_agent antigravity');
+    expect(agent?.traceId).toBe(traceIdOf(CONVERSATION, 0));
+    expect(attributes(agent!)).toMatchObject({ 'gen_ai.conversation.id': CONVERSATION });
+    expect([startMs(agent!), endMs(agent!)]).toEqual([T0, T0 + 7_500]);
     const chats = spans
       .filter((span) => attributes(span)['gen_ai.operation.name'] === 'chat')
       .map(attributes);
@@ -66,7 +66,7 @@ describe('the worker', () => {
         .map((span) => span.name),
     ).toEqual(['execute_tool run_command']);
     expect(telmoni.requests[0]?.headers.Authorization).toBe(`Bearer ${KEY}`);
-    expect(logOf(home)).toContain(`sent ${runIdOf(CONVERSATION, 0).slice(0, 8)}`);
+    expect(logOf(home)).toContain(`sent ${traceIdOf(CONVERSATION, 0).slice(0, 8)}`);
   });
 
   it('sends nothing anyone said, nor any path, with content off: not to Telmoni, not to its state, not to its log', async () => {
@@ -124,13 +124,13 @@ describe('the worker', () => {
     await runWorker(transcript.stop({ idle: false }), home, telmoni);
     expect(telmoni.spans()).toEqual([]);
     expect(logOf(home)).toContain(
-      `held ${runIdOf(CONVERSATION, 0).slice(0, 8)}: its turn is not over yet`,
+      `held ${traceIdOf(CONVERSATION, 0).slice(0, 8)}: its turn is not over yet`,
     );
     transcript.wait(30).reply();
     const later = transcript.now + 400;
     await runWorker(transcript.stop({ at: later }), home, telmoni);
-    const run = telmoni.spans().find((span) => span.name === 'invoke_agent antigravity');
-    expect(endMs(run!)).toBe(later);
+    const agent = telmoni.spans().find((span) => span.name === 'invoke_agent antigravity');
+    expect(endMs(agent!)).toBe(later);
   });
 
   it('sends each turn once, however many stops it hears', async () => {
@@ -143,9 +143,9 @@ describe('the worker', () => {
     await runWorker(stop, home, telmoni);
     transcript.turn(['view_file']);
     await runWorker(transcript.stop(), home, telmoni);
-    expect([...telmoni.runs().keys()]).toEqual([
-      runIdOf(CONVERSATION, 0),
-      runIdOf(CONVERSATION, 2),
+    expect([...telmoni.traces().keys()]).toEqual([
+      traceIdOf(CONVERSATION, 0),
+      traceIdOf(CONVERSATION, 2),
     ]);
   });
 
@@ -157,7 +157,7 @@ describe('the worker', () => {
     transcript.turn(['view_file']);
     transcript.turn([]);
     await runWorker(transcript.stop(), home, telmoni);
-    expect([...telmoni.runs().keys()]).toEqual([runIdOf(CONVERSATION, 8)]);
+    expect([...telmoni.traces().keys()]).toEqual([traceIdOf(CONVERSATION, 8)]);
   });
 
   it('sends the turn a stop ended though the next prompt landed before the worker read, and holds that one', async () => {
@@ -169,7 +169,7 @@ describe('the worker', () => {
     transcript.wait(3).prompt();
     transcript.reply({ tools: ['run_command'] });
     await runWorker(stop, home, telmoni);
-    expect([...telmoni.runs().keys()]).toEqual([runIdOf(CONVERSATION, 0)]);
+    expect([...telmoni.traces().keys()]).toEqual([traceIdOf(CONVERSATION, 0)]);
     expect(stateOf(home).cursor).toBe(2);
   });
 
@@ -181,14 +181,14 @@ describe('the worker', () => {
     const stop = transcript.stop({ at: transcript.now + 300 });
     transcript.prompt();
     await runWorker(stop, home, telmoni);
-    expect([...telmoni.runs().keys()]).toEqual([runIdOf(CONVERSATION, 0)]);
+    expect([...telmoni.traces().keys()]).toEqual([traceIdOf(CONVERSATION, 0)]);
     transcript.reply({ tools: ['view_file'] });
     transcript.result();
     transcript.reply();
     await runWorker(transcript.stop(), home, telmoni);
-    expect([...telmoni.runs().keys()]).toEqual([
-      runIdOf(CONVERSATION, 0),
-      runIdOf(CONVERSATION, 4),
+    expect([...telmoni.traces().keys()]).toEqual([
+      traceIdOf(CONVERSATION, 0),
+      traceIdOf(CONVERSATION, 4),
     ]);
   });
 
@@ -200,7 +200,7 @@ describe('the worker', () => {
     telmoni.offline = true;
     await runWorker(transcript.stop(), home, telmoni);
     expect(stateOf(home).pending).toHaveLength(1);
-    expect(logOf(home)).toContain(`kept ${runIdOf(CONVERSATION, 0).slice(0, 8)}`);
+    expect(logOf(home)).toContain(`kept ${traceIdOf(CONVERSATION, 0).slice(0, 8)}`);
 
     transcript.turn([]);
     await runWorker(transcript.stop(), home, telmoni);
@@ -209,9 +209,32 @@ describe('the worker', () => {
     telmoni.offline = false;
     transcript.turn([]);
     await runWorker(transcript.stop(), home, telmoni);
-    expect([...telmoni.runs().keys()]).toEqual(
-      [0, 2, 4].map((prompt) => runIdOf(CONVERSATION, prompt)),
+    expect([...telmoni.traces().keys()]).toEqual(
+      [0, 2, 4].map((prompt) => traceIdOf(CONVERSATION, prompt)),
     );
+    expect(stateOf(home).pending).toEqual([]);
+  });
+
+  it('drops a turn kept in a shape no longer sent, says so, and sends the next', async () => {
+    const home = makeHome();
+    const telmoni = new FakeTelmoni();
+    const transcript = new Transcript(home);
+    transcript.turn([]);
+    telmoni.offline = true;
+    await runWorker(transcript.stop(), home, telmoni);
+    const state = stateOf(home);
+    const [kept] = state.pending as Record<string, unknown>[];
+    const { traceId, ...old } = kept!;
+    writeFileSync(
+      join(stateDir(home), `${CONVERSATION}.json`),
+      JSON.stringify({ ...state, pending: [{ ...old, runId: traceId }] }),
+    );
+
+    telmoni.offline = false;
+    transcript.turn([]);
+    await runWorker(transcript.stop(), home, telmoni);
+    expect(logOf(home)).toContain('dropped 1 kept in a shape no longer sent');
+    expect([...telmoni.traces().keys()]).toEqual([traceIdOf(CONVERSATION, 2)]);
     expect(stateOf(home).pending).toEqual([]);
   });
 
@@ -242,8 +265,8 @@ describe('the worker', () => {
     const transcript = new Transcript(home);
     transcript.turn([]);
     await runWorker(transcript.stop(), home, telmoni);
-    expect(new Set(telmoni.runs().keys())).toEqual(
-      new Set([runIdOf(CONVERSATION, 0), runIdOf(OTHER, 0)]),
+    expect(new Set(telmoni.traces().keys())).toEqual(
+      new Set([traceIdOf(CONVERSATION, 0), traceIdOf(OTHER, 0)]),
     );
     expect(stateOf(home, OTHER).pending).toEqual([]);
     expect(stateOf(home, 'aaaaaaaa-0000-4000-8000-000000000001').pending).toHaveLength(1);
@@ -262,7 +285,7 @@ describe('the worker', () => {
     // Once a key is set, the conversation is recorded from that stop on.
     transcript.turn([]);
     await runWorker(transcript.stop(), home, telmoni);
-    expect([...telmoni.runs().keys()]).toEqual([runIdOf(CONVERSATION, 4)]);
+    expect([...telmoni.traces().keys()]).toEqual([traceIdOf(CONVERSATION, 4)]);
   });
 
   it('reads the key file while it is the person’s own and shut to everyone else, with its endpoint and switches', async () => {
@@ -301,7 +324,7 @@ describe('the worker', () => {
     expect(telmoni.requests[0]?.headers.Authorization).toBe(`Bearer ${KEY}`);
   });
 
-  it('puts the workspace’s tags on the run, never its path', async () => {
+  it('puts the workspace’s tags on the trace, never its path', async () => {
     const home = makeHome();
     const telmoni = new FakeTelmoni();
     const transcript = new Transcript(home);
@@ -311,8 +334,8 @@ describe('the worker', () => {
     );
     transcript.turn([]);
     await runWorker(transcript.stop(), home, telmoni);
-    const run = telmoni.spans().find((span) => span.name === 'invoke_agent antigravity');
-    expect(attributes(run!)).toMatchObject({
+    const agent = telmoni.spans().find((span) => span.name === 'invoke_agent antigravity');
+    expect(attributes(agent!)).toMatchObject({
       'telmoni.tag.repo': 'telmoni',
       'telmoni.tag.branch': 'main',
     });
@@ -330,7 +353,7 @@ describe('the worker', () => {
     writeFileSync(path, '{not json');
     transcript.turn([]);
     await runWorker(transcript.stop(), home, telmoni);
-    expect(telmoni.runs().size).toBe(1);
+    expect(telmoni.traces().size).toBe(1);
     expect(logOf(home)).toContain('state unreadable');
   });
 
@@ -346,7 +369,7 @@ describe('the worker', () => {
     utimesSync(lock, now, now);
     transcript.turn([]);
     await runWorker(transcript.stop(), home, telmoni, undefined, { lockWaitMs: 50 });
-    expect(telmoni.runs().size).toBe(1);
+    expect(telmoni.traces().size).toBe(1);
     expect(logOf(home)).toContain('another hook holds the conversation');
   });
 });

@@ -1,6 +1,6 @@
 /**
- * A turn as a run: its model calls with their tokens, its tool calls and its compactions, each timed from the step that
- * began it to the next, and with content on, the conversation as the GenAI conventions' messages.
+ * A turn as a trace: its model calls with their tokens, its tool calls and its compactions, each timed from the step
+ * that began it to the next, and with content on, the conversation as the GenAI conventions' messages.
  */
 
 import { createHash } from 'node:crypto';
@@ -9,9 +9,9 @@ import type {
   CallRecord,
   ModelCallRecord,
   RecordOutcome,
-  RunRecord,
   StepRecord,
   ToolCallRecord,
+  TraceRecord,
 } from 'telmoni';
 
 import { errorKind, modelOf, toolName } from './names.js';
@@ -37,24 +37,20 @@ export interface RecordOptions {
   content: boolean;
 }
 
-const NAMESPACE_URL = '6ba7b811-9dad-11d1-80b4-00c04fd430c8';
+const NAMESPACE_URL = '6ba7b8119dad11d180b400c04fd430c8';
 
-/** A version 5 UUID (RFC 9562) of `name` under `namespace`. */
+/** A version 5 UUID (RFC 9562) of `name` under `namespace`, as its 32 hex digits: a trace id's shape. */
 function uuid5(name: string, namespace: string): string {
-  const digest = createHash('sha1')
-    .update(Buffer.from(namespace.replaceAll('-', ''), 'hex'))
-    .update(name)
-    .digest();
+  const digest = createHash('sha1').update(Buffer.from(namespace, 'hex')).update(name).digest();
   digest[6] = ((digest[6] ?? 0) & 0x0f) | 0x50;
   digest[8] = ((digest[8] ?? 0) & 0x3f) | 0x80;
-  const hex = digest.subarray(0, 16).toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  return digest.subarray(0, 16).toString('hex');
 }
 
 const NAMESPACE = uuid5('https://telmoni.com/antigravity-observability-plugin', NAMESPACE_URL);
 
-/** The run's id, the same however often its turn is built, so a turn sent twice is stored once. */
-export function runIdOf(conversationId: string, prompt: number): string {
+/** The trace's id, the same however often its turn is built, so a turn sent twice is stored once. */
+export function traceIdOf(conversationId: string, prompt: number): string {
   return uuid5(`${conversationId}:${prompt}`, NAMESPACE);
 }
 
@@ -69,8 +65,8 @@ function text(role: string, content: string | undefined): Message[] | undefined 
   return content === undefined ? undefined : [{ role, parts: [{ type: 'text', content }] }];
 }
 
-/** The run for `turn`, or undefined for a turn with no call in it or no time to place it at. */
-export function recordTurn(turn: Turn, options: RecordOptions): RunRecord | undefined {
+/** The trace for `turn`, or undefined for a turn with no call in it or no time to place it at. */
+export function recordTurn(turn: Turn, options: RecordOptions): TraceRecord | undefined {
   const { rows } = turn;
   const known = rows.map((row) => row.at).filter((at): at is number => at !== undefined);
   const start = turn.open.at ?? known[0] ?? options.ending?.at;
@@ -178,13 +174,13 @@ export function recordTurn(turn: Turn, options: RecordOptions): RunRecord | unde
   }
   if (inside.length === 0) return undefined;
 
-  const record: RunRecord = {
-    runId: runIdOf(options.conversationId, turn.open.index),
+  const record: TraceRecord = {
+    traceId: traceIdOf(options.conversationId, turn.open.index),
     agent: AGENT,
     sessionId: options.conversationId,
     start,
     end,
-    // Ordered by start, the run's own times holding every call.
+    // Ordered by start, the agent's own times holding every call.
     inside: inside.sort((a, b) => Number(a.start) - Number(b.start)),
     ...outcome(rows, options.ending, lastError),
   };
@@ -205,7 +201,7 @@ function failure(result: Row): RecordOutcome {
 }
 
 /**
- * The run's outcome: cancelled where the person stopped it; failed by an error's kind, or by the limit it hit, where
+ * The trace's outcome: cancelled where the person stopped it; failed by an error's kind, or by the limit it hit, where
  * the stop says so; else failed only where the turn's last call is an error, as when its stop was never heard.
  */
 function outcome(

@@ -1401,16 +1401,15 @@ function typedPrompt(content) {
 // src/record.ts
 var AGENT = "antigravity";
 var PROVIDER = "gcp.vertex_ai";
-var NAMESPACE_URL = "6ba7b811-9dad-11d1-80b4-00c04fd430c8";
+var NAMESPACE_URL = "6ba7b8119dad11d180b400c04fd430c8";
 function uuid5(name, namespace) {
-  const digest = createHash("sha1").update(Buffer.from(namespace.replaceAll("-", ""), "hex")).update(name).digest();
+  const digest = createHash("sha1").update(Buffer.from(namespace, "hex")).update(name).digest();
   digest[6] = (digest[6] ?? 0) & 15 | 80;
   digest[8] = (digest[8] ?? 0) & 63 | 128;
-  const hex = digest.subarray(0, 16).toString("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  return digest.subarray(0, 16).toString("hex");
 }
 var NAMESPACE = uuid5("https://telmoni.com/antigravity-observability-plugin", NAMESPACE_URL);
-function runIdOf(conversationId, prompt) {
+function traceIdOf(conversationId, prompt) {
   return uuid5(`${conversationId}:${prompt}`, NAMESPACE);
 }
 function isResult(row) {
@@ -1520,12 +1519,12 @@ function recordTurn(turn, options) {
   }
   if (inside.length === 0) return void 0;
   const record = {
-    runId: runIdOf(options.conversationId, turn.open.index),
+    traceId: traceIdOf(options.conversationId, turn.open.index),
     agent: AGENT,
     sessionId: options.conversationId,
     start,
     end,
-    // Ordered by start, the run's own times holding every call.
+    // Ordered by start, the agent's own times holding every call.
     inside: inside.sort((a, b) => Number(a.start) - Number(b.start)),
     ...outcome(rows, options.ending, lastError)
   };
@@ -3100,11 +3099,10 @@ init_esm();
 init_esm();
 init_esm();
 import { randomUUID as randomUUID2 } from "crypto";
-import { randomUUID as randomUUID3 } from "crypto";
 var SCOPE = "telmoni";
+var TRACE_START = "telmoni.trace.start";
 var DISTRO_NAME = "telemetry.distro.name";
 var DISTRO = "telmoni";
-var RUN_ID = "telmoni.run_id";
 var AGENT2 = "telmoni.agent";
 var USER_ID = "user.id";
 var TAG_PREFIX = "telmoni.tag.";
@@ -3123,6 +3121,7 @@ var BATCH_SPANS_MAX = 1e3;
 var ATTRIBUTE_KEY_MAX = 128;
 var ATTRIBUTE_VALUE_MAX = 1024;
 var CANCELLED = "telmoni.cancelled";
+var RETRIEVAL_RETURNED = "telmoni.retrieval.returned";
 var ENVIRONMENT = "deployment.environment.name";
 var RELEASE = "service.version";
 var ENVIRONMENT_MAX = 128;
@@ -3137,6 +3136,8 @@ var RESPONSE_MODEL = "gen_ai.response.model";
 var REQUEST_MODEL = "gen_ai.request.model";
 var PROVIDER2 = "gen_ai.provider.name";
 var REQUEST_REASONING_LEVEL = "gen_ai.request.reasoning.level";
+var PROMPT_NAME = "gen_ai.prompt.name";
+var PROMPT_VERSION = "gen_ai.prompt.version";
 var TIME_TO_FIRST_CHUNK = "gen_ai.response.time_to_first_chunk";
 var INPUT_TOKENS = "gen_ai.usage.input_tokens";
 var OUTPUT_TOKENS = "gen_ai.usage.output_tokens";
@@ -3144,11 +3145,19 @@ var CACHE_READ_INPUT_TOKENS = "gen_ai.usage.cache_read.input_tokens";
 var CACHE_WRITE_INPUT_TOKENS = "gen_ai.usage.cache_write.input_tokens";
 var COST = "gen_ai.usage.cost";
 var SESSION_ID = "gen_ai.conversation.id";
+var DATA_SOURCE_ID = "gen_ai.data_source.id";
+var MEMORY_STORE_ID = "gen_ai.memory.store.id";
+var RETRIEVAL_TOP_K = "gen_ai.retrieval.top_k";
+var MEMORY_RECORD_COUNT = "gen_ai.memory.record.count";
 var INPUT_MESSAGES = "gen_ai.input.messages";
 var OUTPUT_MESSAGES = "gen_ai.output.messages";
 var SYSTEM_INSTRUCTIONS = "gen_ai.system_instructions";
 var TOOL_CALL_ARGUMENTS = "gen_ai.tool.call.arguments";
 var TOOL_CALL_RESULT = "gen_ai.tool.call.result";
+var RETRIEVAL_QUERY_TEXT = "gen_ai.retrieval.query.text";
+var RETRIEVAL_DOCUMENTS = "gen_ai.retrieval.documents";
+var MEMORY_QUERY_TEXT = "gen_ai.memory.query.text";
+var MEMORY_RECORDS = "gen_ai.memory.records";
 var CONTENT_CUT = "telmoni.content_cut";
 var SCRUBBED = "telmoni.scrubbed";
 var STATUS_DESCRIPTION = "otel.status_description";
@@ -3163,10 +3172,10 @@ var CONTENT = /* @__PURE__ */ new Set([
   "gen_ai.tool.definitions",
   TOOL_CALL_ARGUMENTS,
   TOOL_CALL_RESULT,
-  "gen_ai.retrieval.query.text",
-  "gen_ai.retrieval.documents",
-  "gen_ai.memory.query.text",
-  "gen_ai.memory.records",
+  RETRIEVAL_QUERY_TEXT,
+  RETRIEVAL_DOCUMENTS,
+  MEMORY_QUERY_TEXT,
+  MEMORY_RECORDS,
   "gen_ai.prompt.variable",
   "user.email",
   "user.full_name",
@@ -3186,7 +3195,9 @@ var MODEL_OPERATIONS = /* @__PURE__ */ new Set([
 ]);
 var DEFAULT_MODEL_OPERATION = "chat";
 var TOOL_OPERATION = "execute_tool";
-var RUN_OPERATION = "invoke_agent";
+var AGENT_OPERATION = "invoke_agent";
+var RETRIEVAL_OPERATION = "retrieval";
+var SEARCH_MEMORY = "search_memory";
 var MEDIA_FIELDS = [INPUT_MESSAGES, OUTPUT_MESSAGES, SYSTEM_INSTRUCTIONS];
 var MEDIA_PATH = "/v1/media/";
 var FILE_ID_PREFIX = "telmoni:";
@@ -3248,7 +3259,7 @@ var CapExceededError = class extends Error {
   used;
   constructor(cap, limit, used) {
     super(
-      cap === "steps" ? `the run reached its step cap of ${plain(limit)}` : `the run reached its spend cap of $${plain(limit)}, having spent $${plain(used)}`
+      cap === "steps" ? `the trace reached its step cap of ${plain(limit)}` : `the trace reached its spend cap of $${plain(limit)}, having spent $${plain(used)}`
     );
     this.name = "CapExceededError";
     this.cap = cap;
@@ -3730,7 +3741,8 @@ var INTEGERS = /* @__PURE__ */ new Set([
   INPUT_TOKENS,
   OUTPUT_TOKENS,
   CACHE_READ_INPUT_TOKENS,
-  CACHE_WRITE_INPUT_TOKENS
+  CACHE_WRITE_INPUT_TOKENS,
+  RETRIEVAL_TOP_K
 ]);
 var fetchTransport = async (url, init) => {
   const response = await fetch(url, { ...init, redirect: "manual", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
@@ -4227,6 +4239,9 @@ var Exporter = class {
       endTimeUnixNano: nanos(end),
       attributes
     };
+    if (span.links.length > 0) {
+      encoded.links = span.links.map((link) => ({ traceId: link.context.traceId, spanId: link.context.spanId }));
+    }
     const events = keepContent && !trimmed22;
     const sent = span.events.filter((event) => events || event.name === EVALUATION_EVENT);
     if (sent.length > 0) {
@@ -5559,7 +5574,7 @@ var Guard = class _Guard {
     this.#maxSteps = maxSteps;
     this.#maxSpend = maxSpend;
   }
-  /** The run's options' caps, or why they are none: whole steps above 0, and a spend above 0. */
+  /** The trace's options' caps, or why they are none: whole steps above 0, and a spend above 0. */
   static of(options) {
     const steps = options.maxSteps ?? void 0;
     if (steps !== void 0 && !(typeof steps === "number" && Number.isInteger(steps) && steps >= 1)) {
@@ -5574,11 +5589,11 @@ var Guard = class _Guard {
   get spent() {
     return this.#spent;
   }
-  /** Whether the run has a spend cap, which a call priced at nothing never reaches. */
+  /** Whether the trace has a spend cap, which a call priced at nothing never reaches. */
   get capped() {
     return this.#maxSpend !== void 0;
   }
-  /** Counts a step opening, or throws where the run reached a cap: its spend for whatever opens, its steps for a step. */
+  /** Counts a step opening, or throws where the trace reached a cap: its spend for whatever opens, its steps for a step. */
   opens(step) {
     if (this.#maxSpend !== void 0 && this.#spent >= this.#maxSpend) {
       throw new CapExceededError("spend", this.#maxSpend, this.#spent);
@@ -5617,8 +5632,8 @@ var Ids = class {
     }
   }
 };
-function spanIdAt(runHex, place) {
-  const digest = createHash22("sha1").update(Buffer.from(runHex, "hex")).update(String(place)).digest();
+function spanIdAt(traceHex, place) {
+  const digest = createHash22("sha1").update(Buffer.from(traceHex, "hex")).update(String(place)).digest();
   digest[6] = (digest[6] ?? 0) & 15 | 80;
   return digest.subarray(0, 8).toString("hex");
 }
@@ -5652,6 +5667,8 @@ var Processor = class {
   #stage;
   #reserved = 0;
   #dropped = 0;
+  /** A trace's opening queued, which goes without waiting for the delay. */
+  #opening = false;
   #flushers = [];
   #timer;
   #inFlight;
@@ -5715,6 +5732,7 @@ var Processor = class {
       return;
     }
     this.#queue.push(span);
+    if (span.name === TRACE_START && span.parentSpanContext !== void 0) this.#opening = true;
     this.#wake(this.#due() ? 0 : this.#delayMs);
   }
   /** Resolves once the queue is empty and the export in flight has settled. */
@@ -5760,9 +5778,9 @@ var Processor = class {
   #idle() {
     return this.#queue.length === 0 && this.#inFlight === void 0;
   }
-  /** Whether the worker should export without waiting; a record queued goes at once. */
+  /** Whether the worker should export without waiting; a record queued, or a trace's opening, goes at once. */
   #due() {
-    return this.#down || this.#flushers.length > 0 || this.#fences.length > 0 || this.#queue.length >= this.#maxBatchSize;
+    return this.#down || this.#flushers.length > 0 || this.#opening || this.#fences.length > 0 || this.#queue.length >= this.#maxBatchSize;
   }
   // The worker is a timer, never referenced: an idle SDK never keeps the
   // process alive, and a pending one fires no later than the delay.
@@ -5784,6 +5802,7 @@ var Processor = class {
     if (this.#inFlight !== void 0 || this.#givenUp) return;
     const fence = this.#fences[0];
     const batch = this.#queue.splice(0, Math.min(this.#maxBatchSize, (fence ?? Infinity) - this.#taken));
+    this.#opening &&= this.#queue.length > 0;
     this.#taken += batch.length;
     while ((this.#fences[0] ?? Infinity) <= this.#taken) this.#fences.shift();
     const dropped = this.#dropped;
@@ -5831,13 +5850,12 @@ function pause(ms) {
     timer.unref();
   });
 }
-var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var HEX = /^[0-9a-f]+$/;
-function writeHeaders(headers, span, runId, agent) {
+function writeHeaders(headers, span, agent) {
   const sampled = (span.traceFlags & TraceFlags.SAMPLED) !== 0 ? "01" : "00";
   setHeader(headers, TRACEPARENT, `00-${span.traceId}-${span.spanId}-${sampled}`);
   const members = (getHeader(headers, BAGGAGE) ?? "").split(",").map((member) => member.trim()).filter((member) => member !== "" && !isOurs(member));
-  members.push(`${RUN_ID}=${runId}`, `${AGENT2}=${encodeBaggageValue(agent)}`);
+  members.push(`${AGENT2}=${encodeBaggageValue(agent)}`);
   setHeader(headers, BAGGAGE, members.join(","));
 }
 function readHeaders(headers) {
@@ -5845,11 +5863,9 @@ function readHeaders(headers) {
   if (traceparent === void 0) return void 0;
   const spanContext = parseTraceparent(traceparent);
   if (spanContext === void 0) return void 0;
-  const members = baggageMembers(getHeader(headers, BAGGAGE) ?? "");
-  const runId = members.get(RUN_ID);
-  const agent = members.get(AGENT2);
-  if (runId === void 0 || !UUID.test(runId) || agent === void 0 || agent === "") return void 0;
-  return { spanContext, runId: runId.toLowerCase(), agent };
+  const agent = baggageMembers(getHeader(headers, BAGGAGE) ?? "").get(AGENT2);
+  if (agent === void 0 || agent === "") return void 0;
+  return { spanContext, agent };
 }
 function parseTraceparent(header) {
   const parts = header.trim().split("-");
@@ -5874,8 +5890,7 @@ function baggageMembers(header) {
   return members;
 }
 function isOurs(member) {
-  const key = member.split("=", 1)[0].trim();
-  return key === RUN_ID || key === AGENT2;
+  return member.split("=", 1)[0].trim() === AGENT2;
 }
 function isHex2(text3, length) {
   return text3.length === length && HEX.test(text3);
@@ -5938,7 +5953,7 @@ var WHY = {
   version: `its version is up to ${SCORE_VERSION_MAX} characters`,
   range: "a range is a number score's alone",
   value: "its value is a number, a yes or no, or a category",
-  target: `it names a run, a run and one of its spans by 16 hex digits, or a session of up to ${SESSION_ID_MAX} characters`,
+  target: `it names a trace by 32 hex digits, a trace and one of its spans by 16, or a session of up to ${SESSION_ID_MAX} characters`,
   ended: "its span had ended; send it with the client's score, naming the span",
   full: `its span holds ${SCORES_PER_SPAN} scores already`
 };
@@ -5992,26 +6007,23 @@ function eventOf(score) {
   if (score.version !== "") attributes[SCORE_VERSION] = score.version;
   return attributes;
 }
-var UUID2 = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
+var TRACE = /^[0-9a-f]{32}$/i;
 var SPAN = /^[0-9a-f]{16}$/i;
-function uuidHexOf(id) {
-  if (typeof id !== "string" || !UUID2.test(id) || ![32, 36].includes(id.length)) return void 0;
-  return id.replaceAll("-", "").toLowerCase();
-}
-function hyphenated(hex) {
-  return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join("-");
+function traceHexOf(id) {
+  if (typeof id !== "string" || !TRACE.test(id) || /^0+$/.test(id)) return void 0;
+  return id.toLowerCase();
 }
 function targetOf(target) {
   const set = (value) => value !== void 0 && value !== null;
-  const { runId, spanId, sessionId } = target;
+  const { traceId, spanId, sessionId } = target;
   if (set(sessionId)) {
-    if (set(runId) || set(spanId)) return void 0;
+    if (set(traceId) || set(spanId)) return void 0;
     const session = trimmed(sessionId, SESSION_ID_MAX);
     return session ? { session_id: session } : void 0;
   }
-  const hex = uuidHexOf(runId);
-  if (hex === void 0 || /^0+$/.test(hex)) return void 0;
-  const ids = { run_id: hyphenated(hex) };
+  const hex = traceHexOf(traceId);
+  if (hex === void 0) return void 0;
+  const ids = { trace_id: hex };
   if (!set(spanId)) return ids;
   if (typeof spanId !== "string" || !SPAN.test(spanId)) return void 0;
   ids["span_id"] = spanId.toLowerCase();
@@ -6020,7 +6032,7 @@ function targetOf(target) {
 function lateItem(target, score) {
   const ids = targetOf(target);
   if (ids === void 0) return void 0;
-  const item = { id: randomUUID3(), ...ids, name: score.name, data_type: score.type };
+  const item = { id: randomUUID2(), ...ids, name: score.name, data_type: score.type };
   if (score.type === "number") {
     item["value"] = score.value;
     if (score.range !== void 0) [item["range_min"], item["range_max"]] = score.range;
@@ -6035,12 +6047,12 @@ function lateItem(target, score) {
     (_key, value) => typeof value === "string" ? value.replace(LONE_SURROGATE, "\uFFFD") : value
   );
 }
-var RUN_KEY = createContextKey("telmoni.run");
+var TRACE_KEY = createContextKey("telmoni.trace");
 var END2 = /* @__PURE__ */ Symbol("telmoni.end");
 var GUARD = /* @__PURE__ */ Symbol("telmoni.guard");
-function currentRun(ctx = context.active()) {
-  const run = ctx.getValue(RUN_KEY);
-  return run instanceof Run ? run : void 0;
+function currentTrace(ctx = context.active()) {
+  const found = ctx.getValue(TRACE_KEY);
+  return found instanceof Trace ? found : void 0;
 }
 var Handle = class {
   /**
@@ -6052,10 +6064,10 @@ var Handle = class {
   #warnOnce;
   #ended = false;
   #scores = 0;
-  constructor(span, parent, run, warnOnce) {
+  constructor(span, parent, owner, warnOnce) {
     this.span = span;
     this.#warnOnce = warnOnce;
-    this.context = trace.setSpan(parent, span).setValue(RUN_KEY, run ?? this);
+    this.context = trace.setSpan(parent, span).setValue(TRACE_KEY, owner ?? this);
   }
   /**
    * Mark it failed by an error's class, a class's name or a type as text; an `Error`'s message and stack are
@@ -6114,8 +6126,8 @@ var Handle = class {
 };
 var Parent = class extends Handle {
   #opener;
-  constructor(opener, span, parent, run) {
-    super(span, parent, run, opener.warnOnce);
+  constructor(opener, span, parent, owner) {
+    super(span, parent, owner, opener.warnOnce);
     this.#opener = opener;
   }
   step(name, fn) {
@@ -6129,16 +6141,21 @@ var Parent = class extends Handle {
     const [options, fn] = split(a, b);
     return within(this.#opener.toolCall(this.owner, this.context, name, options ?? {}), fn);
   }
+  retrieval(source, a, b) {
+    const [options, fn] = split(a, b);
+    return within(this.#opener.retrieval(this.owner, this.context, source, options ?? {}), fn);
+  }
 };
-var Run = class extends Parent {
-  runId;
+var Trace = class extends Parent {
+  /** Its trace's id, 32 lowercase hex digits: what the client's `score` names once it has ended. */
+  traceId;
   agent;
   #inherited;
   #warnOnce;
   [GUARD];
-  constructor(opener, span, parent, runId, agent, inherited, guard = new Guard()) {
+  constructor(opener, span, parent, agent, inherited, guard = new Guard()) {
     super(opener, span, parent, void 0);
-    this.runId = runId;
+    this.traceId = span.spanContext().traceId;
     this.agent = agent;
     this.#inherited = { ...inherited };
     this.#warnOnce = opener.warnOnce;
@@ -6147,10 +6164,10 @@ var Run = class extends Parent {
   get owner() {
     return this;
   }
-  /** What the run answered: its messages. An answer given after the run ended is not sent. */
+  /** What the agent answered: its messages. An answer given after the trace ended is not sent. */
   answered(answer) {
     if (this.ended) {
-      this.#warnOnce("run:late", "telmoni: a run must be answered before it ends; an answer given after is not sent", {
+      this.#warnOnce("trace:late", "telmoni: a trace must be answered before it ends; an answer given after is not sent", {
         kind: "input"
       });
       return;
@@ -6159,38 +6176,38 @@ var Run = class extends Parent {
       this.span.setAttribute(OUTPUT_MESSAGES, asJson(answer.outputMessages));
     }
   }
-  /** What every span inside the run carries. */
+  /** What every span inside the trace carries. */
   get inherited() {
     return { ...this.#inherited };
   }
-  /** What the run's model calls have cost so far in US dollars, counted as its spend cap counts them, in this process. */
+  /** What the trace's model calls have cost so far in US dollars, counted as its spend cap counts them, in this process. */
   get spent() {
     return this[GUARD].spent;
   }
 };
 var Step = class extends Parent {
-  #run;
-  constructor(opener, span, parent, run) {
-    super(opener, span, parent, run);
-    this.#run = run;
+  #trace;
+  constructor(opener, span, parent, owner) {
+    super(opener, span, parent, owner);
+    this.#trace = owner;
   }
   get owner() {
-    return this.#run;
+    return this.#trace;
   }
 };
 var ModelCall = class extends Handle {
   #warnOnce;
-  #run;
+  #trace;
   #provider;
   #prices;
   #model;
   /** Its usage as its span holds it, each attribute as last sent. */
   #held = {};
   #counted = 0;
-  constructor(span, parent, run, warnOnce, by) {
-    super(span, parent, run, warnOnce);
+  constructor(span, parent, owner, warnOnce, by) {
+    super(span, parent, owner, warnOnce);
     this.#warnOnce = warnOnce;
-    this.#run = run;
+    this.#trace = owner;
     this.#provider = by.provider;
     this.#model = by.model;
     this.#prices = by.prices;
@@ -6214,7 +6231,7 @@ var ModelCall = class extends Handle {
     if (this.ended) {
       this.#warnOnce(
         "call:late",
-        "telmoni: a model call must be answered before it ends; an answer given after is not sent and counts nothing toward the run's spend",
+        "telmoni: a model call must be answered before it ends; an answer given after is not sent and counts nothing toward the trace's spend",
         { kind: "input" }
       );
       return;
@@ -6231,7 +6248,7 @@ var ModelCall = class extends Handle {
     }
     this.#count();
   }
-  /** Its cost to its run's spend, in place of what it counted before: reported, else priced, else nothing. */
+  /** Its cost to its trace's spend, in place of what it counted before: reported, else priced, else nothing. */
   #count() {
     const held = this.#held;
     const count2 = (key) => {
@@ -6246,13 +6263,13 @@ var ModelCall = class extends Handle {
     };
     const reported = held[COST];
     let cost = typeof reported === "number" ? reported : priced(this.#prices, this.#provider, this.#model, tokens);
-    const guard = this.#run[GUARD];
+    const guard = this.#trace[GUARD];
     if (cost === void 0) {
       cost = 0;
       if (guard.capped && Object.values(tokens).some((n) => n > 0)) {
         this.#warnOnce(
           `unpriced:${this.#provider}:${this.#model}`,
-          `telmoni: no price for ${this.#model || "a call with no model"} (${this.#provider || "no provider"}), which reported no cost; it counts nothing toward the run's spend cap`,
+          `telmoni: no price for ${this.#model || "a call with no model"} (${this.#provider || "no provider"}), which reported no cost; it counts nothing toward the trace's spend cap`,
           { kind: "input" }
         );
       }
@@ -6265,6 +6282,27 @@ var ToolCall = class extends Handle {
   /** What the tool returned: content, sent only when asked and allowed. */
   returned(result) {
     this.span.setAttribute(TOOL_CALL_RESULT, asJson(result));
+  }
+};
+var Retrieval = class extends Handle {
+  #warnOnce;
+  /** Whether it searched a memory, whose names its finds go under. */
+  #memory;
+  constructor(span, parent, owner, warnOnce, memory) {
+    super(span, parent, owner, warnOnce);
+    this.#warnOnce = warnOnce;
+    this.#memory = memory;
+  }
+  /** What the search found, a list: content, sent only when asked and allowed, and how many it holds, sent in every mode. */
+  returned(documents) {
+    if (!Array.isArray(documents)) {
+      this.#warnOnce("retrieval:documents", "telmoni: a retrieval's documents must be a list; they are neither sent nor counted", {
+        kind: "input"
+      });
+      return;
+    }
+    const [found, count2] = this.#memory ? [MEMORY_RECORDS, MEMORY_RECORD_COUNT] : [RETRIEVAL_DOCUMENTS, RETRIEVAL_RETURNED];
+    this.span.setAttributes({ [found]: asJson(documents), [count2]: documents.length });
   }
 };
 function within(handle, fn) {
@@ -6313,53 +6351,57 @@ var Opener = class {
   get warnOnce() {
     return this.#warnOnce;
   }
-  run(given, options) {
+  trace(given, options) {
     const named = given;
     if (!isSet(named) || isBlank(textOf2(named))) {
-      throw new TypeError("a run needs its agent's name");
+      throw new TypeError("a trace needs its agent's name");
     }
-    const agent = cut(asText(named, "run's agent", this.#warnOnce), AGENT_MAX, "run's agent", this.#warnOnce);
+    const agent = cut(asText(named, "trace's agent", this.#warnOnce), AGENT_MAX, "trace's agent", this.#warnOnce);
     const guard = Guard.of(options);
-    const runId = randomUUID2();
     const user = filled(options.userId, "user id", this.#warnOnce);
     const session = filled(options.sessionId, "session id", this.#warnOnce);
     const inherited = inheritedOf(
-      runId,
       agent,
-      user !== void 0 && fits(user, USER_ID_MAX, "user id", this.#warnOnce) ? user : void 0,
-      session !== void 0 && fits(session, SESSION_ID_MAX, "session id", this.#warnOnce) ? session : void 0
+      user !== void 0 && fits(user, USER_ID_MAX, "user id", "trace", this.#warnOnce) ? user : void 0,
+      session !== void 0 && fits(session, SESSION_ID_MAX, "session id", "trace", this.#warnOnce) ? session : void 0
     );
-    const attributes = runAttributes(agent, inherited, tagsOf(Object.entries(options.tags ?? {}), this.#warnOnce));
+    const attributes = agentAttributes(agent, inherited, tagsOf(Object.entries(options.tags ?? {}), this.#warnOnce));
     if (isSet(options.inputMessages)) {
       attributes[INPUT_MESSAGES] = asJson(options.inputMessages);
     }
-    const parent = context.active();
-    const span = this.#start(runSpanName(agent), parent, attributes, SpanKind.INTERNAL);
-    return new Run(this, span, parent, runId, agent, inherited, guard);
+    const application = context.active();
+    const linked = trace.getSpanContext(application);
+    const links = linked !== void 0 && isSpanContextValid(linked) ? [{ context: linked }] : [];
+    const span = this.#tracer.startSpan(agentSpanName(agent), { kind: SpanKind.INTERNAL, attributes, links }, ROOT_CONTEXT);
+    const openedAt = span.startTime;
+    if (openedAt !== void 0) {
+      const options2 = { kind: SpanKind.INTERNAL, attributes: inherited, startTime: openedAt };
+      this.#tracer.startSpan(TRACE_START, options2, trace.setSpan(application, span)).end(openedAt);
+    }
+    return new Trace(this, span, application, agent, inherited, guard);
   }
   /**
-   * A run another service opened, continued here under the span the headers
-   * named: a run whose own span is the caller's, non-recording here, so its
-   * steps and calls nest under it and carry the run, and nothing of it is
+   * A trace another service opened, continued here under the span the headers
+   * named: a trace whose own span is the caller's, non-recording here, so its
+   * steps and calls nest under it and carry the agent, and nothing of it is
    * sent or ended from this side.
    */
-  continued(remote, runId, given) {
-    const agent = cut(given, AGENT_MAX, "run's agent", this.#warnOnce);
-    const inherited = inheritedOf(runId, agent);
-    return new Run(this, trace.wrapSpanContext(remote), context.active(), runId, agent, inherited);
+  continued(remote, given) {
+    const agent = cut(given, AGENT_MAX, "trace's agent", this.#warnOnce);
+    return new Trace(this, trace.wrapSpanContext(remote), context.active(), agent, inheritedOf(agent));
   }
-  step(run, parent, given) {
-    run[GUARD].opens(true);
+  step(owner, parent, given) {
+    owner[GUARD].opens(true);
     let name = asText(given, "step's name", this.#warnOnce);
     if (name === "") {
       this.#warnOnce("step:name", "telmoni: a step needs its name; one without is sent named step", { kind: "input" });
       name = "step";
     }
-    const span = this.#start(cut(name, NAME_MAX, "step's name", this.#warnOnce), parent, run.inherited, SpanKind.INTERNAL);
-    return new Step(this, span, parent, run);
+    const span = this.#start(cut(name, NAME_MAX, "step's name", this.#warnOnce), parent, owner.inherited, SpanKind.INTERNAL);
+    return new Step(this, span, parent, owner);
   }
-  modelCall(run, parent, given, options) {
-    run[GUARD].opens(false);
+  modelCall(owner, parent, given, options) {
+    owner[GUARD].opens(false);
     const asked = asText(given, "model", this.#warnOnce);
     const model = asked === "" ? "" : cut(asked, MODEL_MAX3, "model", this.#warnOnce);
     if (model === "") {
@@ -6372,7 +6414,8 @@ var Opener = class {
     const named = filled(options.provider, "provider", this.#warnOnce);
     const provider = named === void 0 ? "" : cut(named, PROVIDER_MAX, "provider", this.#warnOnce);
     const operation = operationOf(options.operation, this.#warnOnce);
-    const [name, attributes] = modelCallOpening(run.inherited, model, operation, provider);
+    const [prompt, promptVersion] = promptOf(options, this.#warnOnce);
+    const [name, attributes] = modelCallOpening(owner.inherited, model, operation, provider, prompt, promptVersion);
     if (isSet(options.inputMessages)) {
       attributes[INPUT_MESSAGES] = asJson(options.inputMessages);
     }
@@ -6380,24 +6423,57 @@ var Opener = class {
       attributes[SYSTEM_INSTRUCTIONS] = asJson(options.systemInstructions);
     }
     const span = this.#start(name, parent, attributes, SpanKind.CLIENT);
-    return new ModelCall(span, parent, run, this.#warnOnce, { provider, model, prices: this.#prices });
+    return new ModelCall(span, parent, owner, this.#warnOnce, { provider, model, prices: this.#prices });
   }
-  toolCall(run, parent, given, options) {
-    run[GUARD].opens(false);
+  toolCall(owner, parent, given, options) {
+    owner[GUARD].opens(false);
     const name = cut(asText(given, "tool's name", this.#warnOnce), NAME_MAX, "tool's name", this.#warnOnce);
-    const attributes = toolAttributes(run.inherited, name);
+    const attributes = toolAttributes(owner.inherited, name);
     if (isSet(options.arguments)) {
       attributes[TOOL_CALL_ARGUMENTS] = asJson(options.arguments);
     }
     const span = this.#start(toolSpanName(name), parent, attributes, SpanKind.INTERNAL);
-    return new ToolCall(span, parent, run, this.#warnOnce);
+    return new ToolCall(span, parent, owner, this.#warnOnce);
+  }
+  retrieval(owner, parent, given, options) {
+    owner[GUARD].opens(false);
+    const memory = Boolean(options.memory);
+    const [operation, sourceKey, queryKey] = memory ? [SEARCH_MEMORY, MEMORY_STORE_ID, MEMORY_QUERY_TEXT] : [RETRIEVAL_OPERATION, DATA_SOURCE_ID, RETRIEVAL_QUERY_TEXT];
+    const attributes = { ...owner.inherited, [OPERATION]: operation };
+    const named = asText(given, "retrieval's source", this.#warnOnce);
+    const source = isBlank(named) ? "" : cut(named, NAME_MAX, "retrieval's source", this.#warnOnce);
+    if (source === "") {
+      this.#warnOnce(
+        "retrieval:source",
+        "telmoni: a retrieval needs its source; one without is sent named by its operation alone",
+        { kind: "input" }
+      );
+    } else {
+      attributes[sourceKey] = source;
+    }
+    const name = memory || source === "" ? operation : `${operation} ${source}`;
+    if (isSet(options.topK)) {
+      const topK = whole(options.topK, 0, 2 ** 63);
+      if (topK === void 0) {
+        this.#warnOnce(
+          `retrieval:${RETRIEVAL_TOP_K}`,
+          `telmoni: ${RETRIEVAL_TOP_K} must be a whole number from 0 within 64 bits; the retrieval is sent without it`,
+          { kind: "input" }
+        );
+      } else {
+        attributes[RETRIEVAL_TOP_K] = topK;
+      }
+    }
+    if (isSet(options.query)) attributes[queryKey] = asJson(options.query);
+    const span = this.#start(name, parent, attributes, SpanKind.CLIENT);
+    return new Retrieval(span, parent, owner, this.#warnOnce, memory);
   }
   /**
-   * A run that has ended, sent as the live calls would have sent it.
+   * A trace that has ended, sent as the live calls would have sent it.
    *
-   * Its trace is its own, named by the run's id, whatever context is active;
+   * It goes under the trace id the record gives, whatever context is active;
    * each span's id is derived from that id and the span's place in the record.
-   * Its spans are queued whole once built, the run's own last, and travel in
+   * Its spans are queued whole once built, the agent's own last, and travel in
    * exports of their own, so the same record sent again is the same bytes,
    * whatever else is sent meanwhile. Throws `QueueFullError`, queuing nothing,
    * when the export queue has no room for the whole record, and
@@ -6406,17 +6482,18 @@ var Opener = class {
   record(record) {
     const agent = record.agent;
     if (typeof agent !== "string" || isBlank(agent)) {
-      throw new TypeError("a run needs its agent's name");
+      throw new TypeError("a trace needs its agent's name");
     }
     if ([...agent].length > AGENT_MAX) {
-      throw new RangeError(`a recorded run's agent must be up to ${AGENT_MAX} characters`);
+      throw new RangeError(`a recorded trace's agent must be up to ${AGENT_MAX} characters`);
     }
-    const runHex = uuidHex(record.runId);
-    check(record, "run");
+    const traceHex = traceHexOf(record.traceId);
+    if (traceHex === void 0) throw new TypeError("a recorded trace's id must be 32 hex digits, not all zeros");
+    check(record, "trace");
     const tags = record.tags ?? {};
     const tagged = isObject2(tags) ? Object.entries(tags) : void 0;
     if (tagged === void 0 || tagged.some(([, value]) => typeof value !== "string")) {
-      throw new TypeError("a recorded run's tags must be an object of strings");
+      throw new TypeError("a recorded trace's tags must be an object of strings");
     }
     const messages = [
       [INPUT_MESSAGES, record.inputMessages],
@@ -6431,9 +6508,8 @@ var Opener = class {
       }
       if (later(start, end)) throw new RangeError("a recorded span cannot end before it starts");
     }
-    const runId = hyphenated(runHex);
-    const inherited = inheritedOf(runId, record.agent, record.userId, record.sessionId);
-    const attributes = runAttributes(record.agent, inherited, tagsOf(tagged, this.#warnOnce));
+    const inherited = inheritedOf(record.agent, record.userId, record.sessionId);
+    const attributes = agentAttributes(record.agent, inherited, tagsOf(tagged, this.#warnOnce));
     for (const [key, value] of messages) {
       if (isSet(value)) attributes[key] = asJson(value);
     }
@@ -6450,8 +6526,8 @@ var Opener = class {
     }
     let place = 0;
     const open = (name, parent, spanAttributes, kind, at) => this.#ids.given(
-      runHex,
-      spanIdAt(runHex, place++),
+      traceHex,
+      spanIdAt(traceHex, place++),
       () => this.#tracer.startSpan(name, { kind, attributes: spanAttributes, startTime: hrTimeOf(at) }, parent)
     );
     const call = (item, parent) => {
@@ -6478,8 +6554,8 @@ var Opener = class {
         close(step, item, scored.get(item));
       }
     };
-    this.#processor.record(runHex, 1 + every.length, () => {
-      const span = open(runSpanName(record.agent), ROOT_CONTEXT, attributes, SpanKind.INTERNAL, record.start);
+    this.#processor.record(traceHex, 1 + every.length, () => {
+      const span = open(agentSpanName(record.agent), ROOT_CONTEXT, attributes, SpanKind.INTERNAL, record.start);
       build(items, trace.setSpan(ROOT_CONTEXT, span));
       close(span, record, scored.get(record));
     });
@@ -6500,12 +6576,6 @@ var Opener = class {
     return this.#tracer.startSpan(name, { kind, attributes }, parent);
   }
 };
-function uuidHex(runId) {
-  const hex = uuidHexOf(runId);
-  if (hex === void 0) throw new TypeError("a recorded run's id must be a UUID");
-  if (/^0+$/.test(hex)) throw new TypeError("a recorded run's id must be a UUID other than the nil UUID");
-  return hex;
-}
 function hrTimeOf(time) {
   const ms = time instanceof Date ? time.getTime() : time;
   if (typeof ms !== "number" || !Number.isFinite(ms)) {
@@ -6522,7 +6592,7 @@ var STEP_DEPTH_MAX = 16;
 function read(record) {
   const inside = record.inside ?? [];
   if (!Array.isArray(inside)) {
-    throw new TypeError("a recorded run's inside must be an array, in the order it ran");
+    throw new TypeError("a recorded trace's inside must be an array, in the order it ran");
   }
   return readItems(inside, 1);
 }
@@ -6556,7 +6626,7 @@ function* walk(items) {
   }
 }
 var FIELDS = {
-  run: [
+  trace: [
     ["userId", "string", true],
     ["sessionId", "string", true]
   ],
@@ -6575,7 +6645,7 @@ var OUTCOME = [
   ["cancelled", "boolean", true]
 ];
 var CAPS = {
-  run: { userId: USER_ID_MAX, sessionId: SESSION_ID_MAX },
+  trace: { userId: USER_ID_MAX, sessionId: SESSION_ID_MAX },
   step: { name: NAME_MAX },
   model_call: { model: MODEL_MAX3, provider: PROVIDER_MAX, reasoningEffort: ATTRIBUTE_VALUE_MAX },
   tool_call: { name: NAME_MAX }
@@ -6710,31 +6780,48 @@ function numberOf(value) {
   if (typeof value === "bigint" || value instanceof Number) return Number(value);
   return typeof value === "string" && DECIMAL.test(value) ? Number(value) : Number.NaN;
 }
-function inheritedOf(runId, agent, user, session) {
-  const inherited = { [RUN_ID]: runId, [AGENT2]: agent };
+function inheritedOf(agent, user, session) {
+  const inherited = { [AGENT2]: agent };
   if (user) inherited[USER_ID] = user;
   if (session) inherited[SESSION_ID] = session;
   return inherited;
 }
-function runAttributes(agent, inherited, tags) {
+function agentAttributes(agent, inherited, tags) {
   return {
-    [OPERATION]: RUN_OPERATION,
+    [OPERATION]: AGENT_OPERATION,
     [AGENT_NAME]: agent,
     ...inherited,
     ...tags
   };
 }
-function modelCallOpening(inherited, model, operation, provider) {
+function modelCallOpening(inherited, model, operation, provider, prompt = "", promptVersion = "") {
   const attributes = { ...inherited, [OPERATION]: operation };
   if (model !== "") attributes[REQUEST_MODEL] = model;
   if (provider !== "") attributes[PROVIDER2] = provider;
+  if (prompt !== "") {
+    attributes[PROMPT_NAME] = prompt;
+    if (promptVersion !== "") attributes[PROMPT_VERSION] = promptVersion;
+  }
   return [model === "" ? operation : `${operation} ${model}`, attributes];
+}
+function promptOf(options, warnOnce) {
+  const kept = (value, what) => {
+    const text3 = isSet(value) ? asText(value, what, warnOnce) : "";
+    return isBlank(text3) || !fits(text3, ATTRIBUTE_VALUE_MAX, what, "call", warnOnce) ? "" : text3;
+  };
+  const name = kept(options.prompt, "prompt's name");
+  const version = kept(options.promptVersion, "prompt's version");
+  if (version === "" || name !== "") return [name, version];
+  warnOnce("call:prompt_version", "telmoni: a prompt's version needs its prompt's name; the call is sent without it", {
+    kind: "input"
+  });
+  return ["", ""];
 }
 function toolAttributes(inherited, name) {
   return { ...inherited, [OPERATION]: TOOL_OPERATION, [TOOL_NAME]: name };
 }
-function runSpanName(agent) {
-  return `${RUN_OPERATION} ${agent}`;
+function agentSpanName(agent) {
+  return `${AGENT_OPERATION} ${agent}`;
 }
 function toolSpanName(name) {
   return `${TOOL_OPERATION} ${name}`;
@@ -6758,12 +6845,12 @@ function tagsOf(given, warnOnce) {
     const length = [...key].length;
     if (length === 0 || length > TAG_KEY_MAX || shown(sent) > TAG_VALUE_MAX) {
       warnOnce(
-        "run:tag",
+        "trace:tag",
         "telmoni: a tag's key must be 1 to 64 characters and its value up to 256; the tag is not sent",
         { kind: "input" }
       );
     } else if (count2 === TAGS_MAX) {
-      warnOnce("run:tags", "telmoni: a run carries up to 32 tags, the most ingest keeps; the rest are not sent", {
+      warnOnce("trace:tags", "telmoni: a trace carries up to 32 tags, the most ingest keeps; the rest are not sent", {
         kind: "input"
       });
     } else {
@@ -6805,9 +6892,9 @@ function cut(value, most, what, warnOnce) {
   });
   return characters.slice(0, most).join("");
 }
-function fits(value, most, what, warnOnce) {
+function fits(value, most, what, span, warnOnce) {
   if (value.length <= most || [...value].length <= most) return true;
-  warnOnce(`long:${what}`, `telmoni: a ${what} must be up to ${most} characters; the run is sent without it`, {
+  warnOnce(`long:${what}`, `telmoni: a ${what} must be up to ${most} characters; the ${span} is sent without it`, {
     kind: "input"
   });
   return false;
@@ -6845,7 +6932,7 @@ function isPromiseLike2(value) {
 var RecordingSampler = class {
   #root;
   // The api gives no way to read the application's provider's sampler, as
-  // Python's does; without one given, a root run samples, as an application's
+  // Python's does; without one given, a trace samples, as an application's
   // default ParentBased(AlwaysOn) would.
   constructor(root) {
     this.#root = root ?? new AlwaysOnSampler();
@@ -7015,7 +7102,8 @@ var Telmoni = class _Telmoni {
         attributeCountLimit: 128,
         attributeValueLengthLimit: Infinity,
         eventCountLimit: 32,
-        linkCountLimit: 0,
+        // One: the application's span a trace opened beside.
+        linkCountLimit: 1,
         attributePerEventCountLimit: 32,
         attributePerLinkCountLimit: 0
       },
@@ -7063,55 +7151,55 @@ var Telmoni = class _Telmoni {
   get contentMode() {
     return this.#exporter.contentMode;
   }
-  run(agent, a, b) {
+  trace(agent, a, b) {
     const [options, fn] = split(a, b);
-    return within(this.#opener.run(agent, options ?? {}), fn);
+    return within(this.#opener.trace(agent, options ?? {}), fn);
   }
   wrap(agent, a, b) {
     const [options, fn] = split(a, b);
-    const wrapped = (...args) => this.run(agent, options ?? {}, (run) => fn(...args, run));
+    const wrapped = (...args) => this.trace(agent, options ?? {}, (opened) => fn(...args, opened));
     Object.defineProperty(wrapped, "name", { value: fn.name, configurable: true });
     return wrapped;
   }
   /**
-   * Send a run that has already ended, as the live calls would have; a record
+   * Send a trace that has already ended, as the live calls would have; a record
    * ingest would refuse, or the queue has no room for, throws, sending nothing.
    */
-  recordRun(record) {
+  recordTrace(record) {
     this.#opener.record(record);
   }
   /**
-   * Score what has ended — a run, by `runId`; one of its spans, by `runId` and
-   * the handle's `spanId`; or a session, by `sessionId` — sent to `/v1/scores`
-   * with the next export. One refused is not sent, with one warning.
+   * Score what has ended — a trace, by `traceId`; one of its spans, by
+   * `traceId` and the handle's `spanId`; or a session, by `sessionId` — sent
+   * to `/v1/scores` with the next export. One refused is not sent, with one warning.
    */
   score(name, value, options) {
     this.#opener.score(name, value, options ?? {});
   }
   /**
-   * Writes what the next service continues the run from: the W3C `traceparent`
-   * of `from`'s span, or the active context's, and the run's id and agent as
-   * `baggage` members beside the headers' own. Outside a run it writes nothing.
+   * Writes what the next service continues the trace from: the W3C `traceparent`
+   * of `from`'s span, or the active context's, and the agent as a `baggage`
+   * member beside the headers' own. Outside a trace it writes nothing.
    */
   inject(headers, from) {
     const ctx = from?.context ?? context.active();
-    const run = currentRun(ctx);
-    if (run === void 0) return;
+    const current = currentTrace(ctx);
+    if (current === void 0) return;
     const span = trace.getSpanContext(ctx);
     if (span === void 0 || !isSpanContextValid(span)) return;
-    writeHeaders(headers, span, run.runId, run.agent);
+    writeHeaders(headers, span, current.agent);
   }
   /**
-   * The run `headers` name, continued here: its steps and calls take the
-   * caller's span as their parent and carry the caller's run, so the trace
-   * shows the work where it was asked for. Nothing ends a continued run
+   * The trace `headers` name, continued here: its steps and calls take the
+   * caller's span as their parent and carry the caller's agent, so the trace
+   * shows the work where it was asked for. Nothing ends a continued trace
    * here; the caller's own span does. Undefined for headers that name no
-   * run.
+   * trace.
    */
   extract(headers) {
     const read22 = readHeaders(headers);
     if (read22 === void 0) return void 0;
-    return this.#opener.continued(read22.spanContext, read22.runId, read22.agent);
+    return this.#opener.continued(read22.spanContext, read22.agent);
   }
   /**
    * Waits for everything queued to be sent or given up: true once nothing is left to send, kept or
@@ -7211,7 +7299,7 @@ var Sender = class {
     const { telmoni, heard } = first !== void 0 && release === void 0 ? first : this.#client(release);
     try {
       try {
-        telmoni.recordRun(record);
+        telmoni.recordTrace(record);
       } catch (error) {
         return { outcome: "invalid", error: error instanceof Error ? error.name : typeof error };
       }
@@ -7419,7 +7507,7 @@ function tagProblem(key, value) {
     return BAD_VALUE;
   return void 0;
 }
-function tagRun(record, folder, warned, log) {
+function tagTrace(record, folder, warned, log) {
   if (folder === void 0) return;
   const { tags, problems } = tagsAt(folder);
   for (const problem of problems) {
@@ -7524,14 +7612,14 @@ async function own(stop2, state, settings, options, dir, log) {
       await sendKept(state, sender, dir, stop2.conversationId, log);
       for (const turn of turns) {
         if (turn.open.index < (state.cursor ?? cursor)) continue;
-        const runId = runIdOf(stop2.conversationId, turn.open.index);
+        const traceId = traceIdOf(stop2.conversationId, turn.open.index);
         if (!isComplete(turn, ended, stop2)) {
-          log(`held ${shortId(runId)}: its turn is not over yet`);
+          log(`held ${shortId(traceId)}: its turn is not over yet`);
           break;
         }
         state.cursor = after(turn);
         const ending = state.ends[String(turn.open.index)];
-        if (state.sent.includes(runId)) continue;
+        if (state.sent.includes(traceId)) continue;
         const record = recordTurn(turn, {
           conversationId: stop2.conversationId,
           modelName: stop2.modelName,
@@ -7539,10 +7627,10 @@ async function own(stop2, state, settings, options, dir, log) {
           content: settings.captureContent
         });
         if (record === void 0) continue;
-        tagRun(record, stop2.workspace, warned, log);
+        tagTrace(record, stop2.workspace, warned, log);
         if (state.pending.length > 0 || !await deliver(sender, record, log))
           state.pending.push(record);
-        else remember(state, record.runId);
+        else remember(state, record.traceId);
         save(dir, stop2.conversationId, state);
       }
     } finally {
@@ -7579,23 +7667,23 @@ function endingOf(stop2) {
 async function deliver(sender, record, log) {
   const verdict = await sender.send(record);
   const line = verdictLine(verdict);
-  const run = shortId(record.runId);
+  const trace2 = shortId(record.traceId);
   if (!isDone(verdict)) {
-    log(`kept ${run}, ${line ?? "not sent"}`);
+    log(`kept ${trace2}, ${line ?? "not sent"}`);
     return false;
   }
-  log(line === void 0 ? `sent ${run}` : `${run} ${line}`);
+  log(line === void 0 ? `sent ${trace2}` : `${trace2} ${line}`);
   return true;
 }
-function remember(state, runId) {
-  state.sent.push(runId);
+function remember(state, traceId) {
+  state.sent.push(traceId);
   if (state.sent.length > SENT_MAX) state.sent.splice(0, state.sent.length - SENT_MAX);
 }
 async function sendKept(state, sender, dir, id, log) {
   for (let record = state.pending[0]; record !== void 0; record = state.pending[0]) {
     if (!await deliver(sender, record, log)) return false;
     state.pending.shift();
-    remember(state, record.runId);
+    remember(state, record.traceId);
     save(dir, id, state);
   }
   return true;
@@ -7649,7 +7737,11 @@ function load(dir, id, log) {
     log(`state unreadable (${kindOf(error)}): nothing is sent until it is fixed or moved aside`);
     return void 0;
   }
-  return parseState(raw);
+  const state = parseState(raw);
+  const kept = Array.isArray(raw?.pending) ? raw.pending.length : 0;
+  if (kept > state.pending.length)
+    log(`dropped ${kept - state.pending.length} kept in a shape no longer sent`);
+  return state;
 }
 function isRecord2(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -7662,7 +7754,9 @@ function parseState(raw) {
   if (Array.isArray(raw.sent))
     state.sent = raw.sent.filter((id) => typeof id === "string").slice(-SENT_MAX);
   if (Array.isArray(raw.pending))
-    state.pending = raw.pending.filter(isRecord2);
+    state.pending = raw.pending.filter(
+      (kept) => isRecord2(kept) && typeof kept.traceId === "string"
+    );
   if (isRecord2(raw.ends)) {
     for (const [key, value] of Object.entries(raw.ends)) {
       if (!/^\d{1,9}$/.test(key) || !isRecord2(value) || typeof value.at !== "number") continue;

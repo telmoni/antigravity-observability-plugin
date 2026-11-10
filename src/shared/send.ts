@@ -6,7 +6,7 @@
  */
 
 import { Telmoni } from 'telmoni';
-import type { Hooks, RunRecord, Warning } from 'telmoni';
+import type { Hooks, TraceRecord, Warning } from 'telmoni';
 
 export interface Destination {
   endpoint: string | undefined;
@@ -152,7 +152,7 @@ export class Sender {
   }
 
   /** Sends one turn from a client of its own, `release` naming the host's version, and says what became of it. */
-  async send(record: RunRecord, options?: { release?: string | undefined }): Promise<Verdict> {
+  async send(record: TraceRecord, options?: { release?: string | undefined }): Promise<Verdict> {
     const release = options?.release;
     const first = this.#first;
     this.#first = undefined;
@@ -162,7 +162,7 @@ export class Sender {
       first !== undefined && release === undefined ? first : this.#client(release);
     try {
       try {
-        telmoni.recordRun(record);
+        telmoni.recordTrace(record);
       } catch (error) {
         return { outcome: 'invalid', error: error instanceof Error ? error.name : typeof error };
       }

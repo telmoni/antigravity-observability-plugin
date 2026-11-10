@@ -1,6 +1,6 @@
 # Telmoni for Antigravity
 
-Records each turn of your [Antigravity](https://antigravity.google) sessions in [Telmoni](https://telmoni.com) as a run: the models it called and their tokens, the tools it used and the compactions it made, each with its times and whether it failed. Nothing you or the agent said, except the tags you set, unless you turn on **content** and the project keeps content: then each turn's conversation too.
+Records each turn of your [Antigravity](https://antigravity.google) sessions in [Telmoni](https://telmoni.com) as a trace: the models it called and their tokens, the tools it used and the compactions it made, each with its times and whether it failed. Nothing you or the agent said, except the tags you set, unless you turn on **content** and the project keeps content: then each turn's conversation too.
 
 [Telmoni](https://github.com/telmoni/telmoni) is privacy-first, open-source monitoring for AI agents: with your sessions recorded, its [alerts](https://telmoni.com/docs/monitoring/alerts) tell you when a turn fails, loops on one tool or costs more than you set, and show you the turn that did it. Prompts stay in your process unless you turn content on.
 
@@ -55,7 +55,7 @@ Left blank, the endpoint is `https://api.telmoni.com`. The key file is read as e
 
 ### Ask the agent
 
-The plugin brings a skill, `telmoni-observability`, so you can ask the agent in plain words to help connect Telmoni, to tag this workspace's runs with its repo and branch, or to work out why your sessions aren't showing up. The skill never asks for your key or reads the key file: it tells you what to run in your own terminal.
+The plugin brings a skill, `telmoni-observability`, so you can ask the agent in plain words to help connect Telmoni, to tag this workspace's traces with its repo and branch, or to work out why your sessions aren't showing up. The skill never asks for your key or reads the key file: it tells you what to run in your own terminal.
 
 ### A turn's conversation
 
@@ -77,14 +77,14 @@ No pattern finds a name or a street address.
 
 ## What a turn records
 
-A turn, from your prompt to the agent's last reply, is one run of the agent `antigravity`. Your conversation is the run's session, so the console groups a conversation's runs together. Inside the run:
+A turn, from your prompt to the agent's last reply, is one trace of the agent `antigravity`. Your conversation is the trace's session, so the console groups a conversation's traces together. Inside the trace:
 
 - **Model calls.** One per model call Antigravity made. Each names the conversation's model, its effort apart: `gemini-3.8-flash-low` is `gemini-3.8-flash` at `low`. Each has its input, output and cache-read tokens.
 - **Tool calls.** Each by its name, with its time. A call fails where Antigravity recorded an error, or a command's non-zero exit code where it records one. A call never answered is cancelled.
 - **API errors.** Each is a failed model call, named by its kind (`rate_limit`, `server_error`), never its message.
 - **Compactions.** Each is a step named `compaction`, with the model call that made it.
 
-A turn you cancel is a cancelled run. A turn an error ended, or one that hit Antigravity's limits (`max_invocations`), is a failed one.
+A turn you cancel is a cancelled trace. A turn an error ended, or one that hit Antigravity's limits (`max_invocations`), is a failed one.
 
 A turn is sent when Antigravity's loop stops with no background task still running. A turn whose background task outlasts it is sent at the stop that finds the conversation idle. The first stop the plugin hears in a conversation records that turn on: turns from before the plugin was installed, or before a key was set, stay on your machine.
 

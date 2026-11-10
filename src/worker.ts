@@ -7,11 +7,11 @@ import { existsSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import type { RunRecord } from 'telmoni';
+import type { TraceRecord } from 'telmoni';
 
 import type { Stop } from './payload.js';
 import { keyFile, stateDir } from './paths.js';
-import { type Ending, recordTurn, runIdOf } from './record.js';
+import { type Ending, recordTurn, traceIdOf } from './record.js';
 import { kindOf, shortId, writeLog } from './shared/log.js';
 import {
   type Destination,
@@ -28,13 +28,13 @@ import {
   withLock,
   writeStateFile,
 } from './shared/state.js';
-import { tagRun } from './shared/tags.js';
+import { tagTrace } from './shared/tags.js';
 import { readTranscript } from './transcript.js';
 import { after, cut, endedBy, isComplete } from './turns.js';
 
-/** The run ids a conversation remembers sending, newest last. */
+/** The trace ids a conversation remembers sending, newest last. */
 export const SENT_MAX = 500;
-/** The runs a conversation keeps for Telmoni, oldest first: past this, the oldest go. */
+/** The traces a conversation keeps for Telmoni, oldest first: past this, the oldest go. */
 export const PENDING_MAX = 200;
 
 /** A conversation's file, `<conversation>.json`. */
@@ -42,13 +42,13 @@ export interface State {
   /** The step of the first prompt not yet done with; turns before it were sent, or passed over. */
   cursor?: number;
   sent: string[];
-  /** Runs Telmoni could not take yet, with their conversation where content is on. */
-  pending: RunRecord[];
+  /** Traces Telmoni could not take yet, with their conversation where content is on. */
+  pending: TraceRecord[];
   /** How the stops heard so far ended each turn not yet sent, by its prompt's step. */
   ends: Record<string, Ending>;
   /** The once-a-conversation lines already logged. */
   warned: string[];
-  /** Where its runs go, as a digest of the endpoint under the key: kept runs go nowhere else. */
+  /** Where its traces go, as a digest of the endpoint under the key: kept traces go nowhere else. */
   destination?: string;
 }
 
@@ -99,7 +99,7 @@ export async function work(stop: Stop, options: WorkOptions): Promise<void> {
   }
 }
 
-/** The conversation's own turns; the destination it sent to, where every run it kept went. */
+/** The conversation's own turns; the destination it sent to, where every trace it kept went. */
 async function own(
   stop: Stop,
   state: State,
@@ -150,14 +150,14 @@ async function own(
       await sendKept(state, sender, dir, stop.conversationId, log);
       for (const turn of turns) {
         if (turn.open.index < (state.cursor ?? cursor)) continue;
-        const runId = runIdOf(stop.conversationId, turn.open.index);
+        const traceId = traceIdOf(stop.conversationId, turn.open.index);
         if (!isComplete(turn, ended, stop)) {
-          log(`held ${shortId(runId)}: its turn is not over yet`);
+          log(`held ${shortId(traceId)}: its turn is not over yet`);
           break;
         }
         state.cursor = after(turn);
         const ending = state.ends[String(turn.open.index)];
-        if (state.sent.includes(runId)) continue;
+        if (state.sent.includes(traceId)) continue;
         const record = recordTurn(turn, {
           conversationId: stop.conversationId,
           modelName: stop.modelName,
@@ -165,11 +165,11 @@ async function own(
           content: settings.captureContent,
         });
         if (record === undefined) continue;
-        tagRun(record, stop.workspace, warned, log);
-        // Behind a kept run, in order: Telmoni gets a conversation's turns as they came.
+        tagTrace(record, stop.workspace, warned, log);
+        // Behind a kept trace, in order: Telmoni gets a conversation's turns as they came.
         if (state.pending.length > 0 || !(await deliver(sender, record, log)))
           state.pending.push(record);
-        else remember(state, record.runId);
+        else remember(state, record.traceId);
         save(dir, stop.conversationId, state);
       }
     } finally {
@@ -206,25 +206,25 @@ function endingOf(stop: Stop): Ending {
   return ending;
 }
 
-/** Sends one run and logs what became of it; true where it is done with, false where it is to go again. */
-async function deliver(sender: Sender, record: RunRecord, log: Log): Promise<boolean> {
+/** Sends one trace and logs what became of it; true where it is done with, false where it is to go again. */
+async function deliver(sender: Sender, record: TraceRecord, log: Log): Promise<boolean> {
   const verdict = await sender.send(record);
   const line = verdictLine(verdict);
-  const run = shortId(record.runId);
+  const trace = shortId(record.traceId);
   if (!isDone(verdict)) {
-    log(`kept ${run}, ${line ?? 'not sent'}`);
+    log(`kept ${trace}, ${line ?? 'not sent'}`);
     return false;
   }
-  log(line === undefined ? `sent ${run}` : `${run} ${line}`);
+  log(line === undefined ? `sent ${trace}` : `${trace} ${line}`);
   return true;
 }
 
-function remember(state: State, runId: string): void {
-  state.sent.push(runId);
+function remember(state: State, traceId: string): void {
+  state.sent.push(traceId);
   if (state.sent.length > SENT_MAX) state.sent.splice(0, state.sent.length - SENT_MAX);
 }
 
-/** The conversation's kept runs, oldest first, until one is kept again; true once none is left. */
+/** The conversation's kept traces, oldest first, until one is kept again; true once none is left. */
 async function sendKept(
   state: State,
   sender: Sender,
@@ -235,7 +235,7 @@ async function sendKept(
   for (let record = state.pending[0]; record !== undefined; record = state.pending[0]) {
     if (!(await deliver(sender, record, log))) return false;
     state.pending.shift();
-    remember(state, record.runId);
+    remember(state, record.traceId);
     save(dir, id, state);
   }
   return true;
@@ -295,7 +295,7 @@ async function settle(path: string, stillMs: number, maxMs: number): Promise<voi
   }
 }
 
-/** A conversation's state, new where none was saved; undefined, logged, where one cannot be read: read as new, it would lose its kept runs. */
+/** A conversation's state, new where none was saved; undefined, logged, where one cannot be read: read as new, it would lose its kept traces. */
 function load(dir: string, id: string, log: Log): State | undefined {
   let raw: Record<string, unknown> | undefined;
   try {
@@ -304,7 +304,11 @@ function load(dir: string, id: string, log: Log): State | undefined {
     log(`state unreadable (${kindOf(error)}): nothing is sent until it is fixed or moved aside`);
     return undefined;
   }
-  return parseState(raw);
+  const state = parseState(raw);
+  const kept = Array.isArray(raw?.pending) ? raw.pending.length : 0;
+  if (kept > state.pending.length)
+    log(`dropped ${kept - state.pending.length} kept in a shape no longer sent`);
+  return state;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -319,7 +323,10 @@ export function parseState(raw: Record<string, unknown> | undefined): State {
   if (Array.isArray(raw.sent))
     state.sent = raw.sent.filter((id): id is string => typeof id === 'string').slice(-SENT_MAX);
   if (Array.isArray(raw.pending))
-    state.pending = raw.pending.filter(isRecord) as unknown as RunRecord[];
+    // One with no trace id was kept by a release that named it otherwise: it is not sent.
+    state.pending = raw.pending.filter(
+      (kept) => isRecord(kept) && typeof kept.traceId === 'string',
+    ) as unknown as TraceRecord[];
   if (isRecord(raw.ends)) {
     for (const [key, value] of Object.entries(raw.ends)) {
       if (!/^\d{1,9}$/.test(key) || !isRecord(value) || typeof value.at !== 'number') continue;
@@ -335,7 +342,7 @@ export function parseState(raw: Record<string, unknown> | undefined): State {
   return state;
 }
 
-/** Saves the state whole, and marks the conversation as holding kept runs while it does, so any hook finds them. */
+/** Saves the state whole, and marks the conversation as holding kept traces while it does, so any hook finds them. */
 function save(dir: string, id: string, state: State): void {
   writeStateFile(dir, id, state);
   const marker = join(dir, `${id}.pending`);

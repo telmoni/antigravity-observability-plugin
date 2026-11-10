@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { stateDir } from '../src/paths.js';
-import { runIdOf } from '../src/record.js';
+import { traceIdOf } from '../src/record.js';
 import {
   CONVERSATION,
   KEY,
@@ -104,9 +104,9 @@ describe('the hook, as Antigravity runs it', () => {
     expect(JSON.parse(result.stdout)).toEqual({});
     // Before the worker's own settle wait is up: the hook never waits on it.
     expect(result.ms).toBeLessThan(2_000);
-    expect(await until(() => bodies.some((body) => body.includes(runIdOf(CONVERSATION, 0))))).toBe(
-      true,
-    );
+    expect(
+      await until(() => bodies.some((body) => body.includes(traceIdOf(CONVERSATION, 0)))),
+    ).toBe(true);
     const state = join(stateDir(home), `${CONVERSATION}.json`);
     expect(
       await until(

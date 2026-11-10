@@ -1,10 +1,10 @@
 # Architecture
 
-The Antigravity plugin for Telmoni: a `Stop` hook that records each turn of a person's Antigravity sessions as a run, metadata only unless the person turns content on, through the platform's TypeScript SDK ([`telmoni/telmoni`](https://github.com/telmoni/telmoni), `sdk/typescript`). The repository is the plugin: Antigravity installs it from its address or from a clone, and runs the hook from the copy. The bundle in `dist/` is committed, since Antigravity builds nothing.
+The Antigravity plugin for Telmoni: a `Stop` hook that records each turn of a person's Antigravity sessions as a trace, metadata only unless the person turns content on, through the platform's TypeScript SDK ([`telmoni/telmoni`](https://github.com/telmoni/telmoni), `sdk/typescript`). The repository is the plugin: Antigravity installs it from its address or from a clone, and runs the hook from the copy. The bundle in `dist/` is committed, since Antigravity builds nothing.
 
 ## Purpose and scope
 
-The plugin records one run per turn, from the person's prompt to the agent's last reply, of the agent `antigravity`, in the conversation Antigravity names. A run holds:
+The plugin records one trace per turn, from the person's prompt to the agent's last reply, of the agent `antigravity`, in the conversation Antigravity names. A trace holds:
 
 - its model calls, with their tokens;
 - its tool calls;
@@ -117,7 +117,7 @@ The turn a stop ended is the last whose prompt the transcript already held as th
 
 The size is what tells a prompt queued while the agent worked from the turn it waited on. Antigravity writes a queued prompt as the stop ends, and its time, to the second, is the stop's own. Read by time, the queued prompt's turn would be sent as soon as it began, without its calls, and passed over.
 
-A prompt written after the hook ran opens a turn still at work. The first turn not complete holds every turn after it, and the log says `held <run id>` at each hook that holds it.
+A prompt written after the hook ran opens a turn still at work. The first turn not complete holds every turn after it, and the log says `held <trace id>` at each hook that holds it.
 
 A turn with no call in it is not recorded.
 
@@ -125,11 +125,11 @@ A turn with no call in it is not recorded.
 
 ## What it sends
 
-One run a turn, built by `record.ts` as the SDK's `RunRecord`, which is also what the state keeps, and sent through `recordRun`.
+One trace a turn, built by `record.ts` as the SDK's `TraceRecord`, which is also what the state keeps, and sent through `recordTrace`.
 
-- **Ids.** The run's id is a version 5 UUID of `<conversation>:<prompt's step>`, under the plugin's own namespace: `uuid5(NAMESPACE_URL, "https://telmoni.com/antigravity-observability-plugin")`. The SDK makes the run's id its trace's, and each span's id from it and the span's place, so a turn sent twice is stored once. The worker also remembers the newest 500 ids it sent, and passes over a turn among them.
-- **The run.**
-  - It is a run of the agent `antigravity`, in the conversation, from the prompt to the turn's end.
+- **Ids.** The trace's id is the 16 bytes of a version 5 UUID of `<conversation>:<prompt's step>`, under the plugin's own namespace, `uuid5(NAMESPACE_URL, "https://telmoni.com/antigravity-observability-plugin")`, written as 32 hex digits. The SDK makes each span's id from it and the span's place, so a turn sent twice is stored once. The worker also remembers the newest 500 ids it sent, and passes over a turn among them.
+- **The trace.**
+  - It is a trace of the agent `antigravity`, in the conversation, from the prompt to the turn's end.
   - It is cancelled where the stop says `USER_CANCELED`.
   - It fails where the stop says `ERROR`, or named an error: by the kind of the turn's last API error, else `AgentError`.
   - It fails by the limit where the stop names one (`MAX_INVOCATIONS` is `max_invocations`).
@@ -142,7 +142,7 @@ Every call is ordered by its start.
 
 **With content on**:
 
-- the run's input is the prompt as typed, and its output the last reply;
+- the agent's input is the prompt as typed, and its output the last reply;
 - each model call carries what is new to it: the turn's first is handed the prompt, each later one the results since the call before, as one `tool` message of `tool_call_response` parts. A system message is never handed;
 - each model call's output is its reasoning, its words and its tool calls with their arguments;
 - each tool call carries its arguments and its output;
@@ -169,36 +169,36 @@ The plugin's folder is `~/.gemini/config/telmoni/`, made or closed to its owner 
 
 - `<conversation>.json`, the conversation's state:
   - `cursor`;
-  - `sent`, the newest 500 run ids;
-  - `pending`, the runs Telmoni could not take yet, with their conversation where content is on, the newest 200;
+  - `sent`, the newest 500 trace ids;
+  - `pending`, the traces Telmoni could not take yet, with their conversation where content is on, the newest 200;
   - `ends`, the stops heard for turns not yet sent, each with its time, reason and whether it named an error;
   - `warned`, the once-a-conversation lines;
   - `destination`, an HMAC of the endpoint under the key, its first 16 hex digits.
 
-  It is written whole to `<conversation>.json.<pid>.tmp`, synced and renamed over the last, after each run sent or kept and at the end. A state that cannot be read is left as it is: the conversation sends nothing until it is fixed or moved aside, since read as new it would lose its kept runs.
-- `<conversation>.pending`, beside a state that still holds runs, made once, so the longest waiting goes first, and any hook finds them without reading every state.
+  It is written whole to `<conversation>.json.<pid>.tmp`, synced and renamed over the last, after each trace sent or kept and at the end. A state that cannot be read is left as it is: the conversation sends nothing until it is fixed or moved aside, since read as new it would lose its kept traces.
+- `<conversation>.pending`, beside a state that still holds traces, made once, so the longest waiting goes first, and any hook finds them without reading every state.
 - `<conversation>.lock`, the worker's while it works on the conversation (`shared/state.ts`'s `withLock`). It holds a token of the worker's own, and is freshened every 10 s; one not freshened for a minute was left by a worker that died. A stop's worker waits a minute for the lock, then logs that another hook holds the conversation and leaves its turns to the next.
-- `hook.log`, a line `<UTC time> <conversation> <text>` for each run sent, taken in part, refused or kept, each turn held, each once-a-conversation warning, each tag dropped and each fault. The worker's stderr goes there too. Past a mebibyte it is moved aside to `hook.log.1`.
+- `hook.log`, a line `<UTC time> <conversation> <text>` for each trace sent, taken in part, refused or kept, each turn held, each once-a-conversation warning, each tag dropped and each fault. The worker's stderr goes there too. Past a mebibyte it is moved aside to `hook.log.1`.
 
-Nothing of the conversation is logged: a conversation is named by the first 8 characters of its id, and a run by the first 8 of its.
+Nothing of the conversation is logged: a conversation is named by the first 8 characters of its id, and a trace by the first 8 of its.
 
 ## Delivery and failure
 
-`shared/send.ts`: a client a run, so the SDK's once-per-client warnings are the run's. Its queue has no bound, and a flush waits as long as the SDK's own attempts take. The verdict is read from each warning's kind, status and problem type, never its words:
+`shared/send.ts`: a client a trace, so the SDK's once-per-client warnings are the trace's. Its queue has no bound, and a flush waits as long as the SDK's own attempts take. The verdict is read from each warning's kind, status and problem type, never its words:
 
 - **Kept, sent again.** A network failure, a timed-out flush, or a refusal with a status that is not final, such as `401`, `403`, `404`, `429`, a `5xx` other than `500`, or a `500` for ingest's database.
-- **Refused for good**, logged and remembered as sent. A refusal at `400` or `413` for what the run holds, `402` for the organization's standing, or `500` for a fault of Telmoni's own; and a run the SDK itself refuses, which includes a kept run that no longer builds.
+- **Refused for good**, logged and remembered as sent. A refusal at `400` or `413` for what the trace holds, `402` for the organization's standing, or `500` for a fault of Telmoni's own; and a trace the SDK itself refuses, which includes a kept trace that no longer builds.
 - **Taken in part**, logged: a span or a field dropped.
 
-A conversation's kept runs go before its new ones, in order: a turn queues behind a kept run unsent.
+A conversation's kept traces go before its new ones, in order: a turn queues behind a kept trace unsent.
 
-A conversation that ends while it still holds runs has no next stop of its own. So the next stop of any conversation that holds none of its own sends what the others left, the longest waiting first:
+A conversation that ends while it still holds traces has no next stop of its own. So the next stop of any conversation that holds none of its own sends what the others left, the longest waiting first:
 
 - each under that conversation's lock, taken without waiting;
-- only where its `destination` is the same, so runs go nowhere their own key did not send them;
+- only where its `destination` is the same, so traces go nowhere their own key did not send them;
 - stopping at the first Telmoni still cannot take.
 
-Past 200 kept runs the oldest go, and the log says how many. A key or endpoint changed under a conversation drops what it kept for the old one, logged.
+Past 200 kept traces the oldest go, and the log says how many. A key or endpoint changed under a conversation drops what it kept for the old one, logged.
 
 ## Shared code
 
@@ -243,14 +243,14 @@ Each suite proves its module:
 - `transcript.test.ts`: each field read, the order, the prompt as typed, content only when asked, and a pipe or a folder in the transcript's place;
 - `turns.test.ts`: how turns are cut, the turn a stop ended (a prompt queued in its own second included), and when one is complete;
 - `names.test.ts`: models, efforts, tools and error kinds;
-- `record.test.ts`: a turn as a run, with its times, pairing, failures, errors, compactions, outcomes and ids, and with content off and on;
+- `record.test.ts`: a turn as a trace, with its times, pairing, failures, errors, compactions, outcomes and ids, and with content off and on;
 - `worker.test.ts`: the worker end to end, the SDK included. It covers:
   - delivery;
   - holding and the end of a held turn;
-  - one run a turn;
+  - one trace a turn;
   - where a conversation starts;
   - a prompt after the stop;
-  - kept, refused and left runs;
+  - kept, refused and left traces;
   - the key, the key file and the environment;
   - tags;
   - an unreadable state and a lock held;
@@ -295,13 +295,13 @@ A Marketplace listing is a partner intake form, sent once `agy plugin validate -
 
 ## Known gaps
 
-- A moved transcript format is not detected. It shows as runs with less in them, or turns held, until the reader catches up.
+- A moved transcript format is not detected. It shows as traces with less in them, or turns held, until the reader catches up.
 - `created_at` is to the second, so a step shorter than a second shows as none.
 - Antigravity's transcript names no model for a step: every call of a turn names the model of the stop that sent it. A model changed in the middle of a turn shows as the later one.
 - A command's exit code is read only where Antigravity records it (`exit_code`). Where it writes it in the command's output alone, a failed command is recorded as one that ran.
 - A subagent (`invoke_subagent`) is recorded as its tool call. What it did is in a conversation of its own, recorded as that conversation's turns where Antigravity runs its hooks there.
-- A compaction that rewrites the transcript under its own step numbers would show its turns again under new run ids. One that rewrites it between a stop and its worker's read moves the offsets the stop's size is held against.
+- A compaction that rewrites the transcript under its own step numbers would show its turns again under new trace ids. One that rewrites it between a stop and its worker's read moves the offsets the stop's size is held against.
 - A turn held on a background task that never ends waits until the conversation's next prompt, holding every turn after it. A conversation that never stops again leaves its last turn unsent.
 - Rows written for a turn after it was sent are not recorded.
 - No image is sent, even with content on, and no release: Antigravity gives a hook neither its version nor a path to it.
-- Kept runs are capped at 200 a conversation, the oldest dropped. A conversation's state file is never removed.
+- Kept traces are capped at 200 a conversation, the oldest dropped. A conversation's state file is never removed.
