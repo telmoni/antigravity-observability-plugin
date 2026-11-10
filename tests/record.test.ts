@@ -34,16 +34,16 @@ describe('a turn as a trace', () => {
   it('is a trace of the agent antigravity in the conversation, from the prompt to the stop', () => {
     const transcript = new Transcript(makeHome());
     transcript.turn(['run_command']);
-    const run = record(transcript, { ending: { at: T0 + 9500 } });
-    expect(run).toMatchObject({
+    const trace = record(transcript, { ending: { at: T0 + 9500 } });
+    expect(trace).toMatchObject({
       traceId: traceIdOf(CONVERSATION, 0),
       agent: 'antigravity',
       sessionId: CONVERSATION,
       start: T0,
       end: T0 + 9500,
     });
-    expect(run?.errorType).toBeUndefined();
-    expect(run?.cancelled).toBeUndefined();
+    expect(trace?.errorType).toBeUndefined();
+    expect(trace?.cancelled).toBeUndefined();
   });
 
   it('times each step from its start to the next’s, the last to the stop', () => {
@@ -52,9 +52,9 @@ describe('a turn as a trace', () => {
     transcript.reply({ tools: ['run_command'] });
     transcript.wait(2).result();
     transcript.wait(3).reply();
-    const run = record(transcript, { ending: { at: T0 + 12_000 } });
+    const trace = record(transcript, { ending: { at: T0 + 12_000 } });
     expect(
-      calls(run).map((call) => [call.type, Number(call.start) - T0, Number(call.end) - T0]),
+      calls(trace).map((call) => [call.type, Number(call.start) - T0, Number(call.end) - T0]),
     ).toEqual([
       ['model_call', 1000, 4000],
       ['tool_call', 4000, 8000],
@@ -83,8 +83,8 @@ describe('a turn as a trace', () => {
     transcript.result({ type: 'VIEW_FILE' });
     transcript.result({ type: 'RUN_COMMAND', exitCode: 1 });
     transcript.reply();
-    const run = record(transcript);
-    expect(tools(run).map((tool) => [tool.name, tool.errorType, tool.cancelled])).toEqual([
+    const trace = record(transcript);
+    expect(tools(trace).map((tool) => [tool.name, tool.errorType, tool.cancelled])).toEqual([
       ['view_file', undefined, undefined],
       ['run_command', 'ToolError', undefined],
       ['grep_search', undefined, true],
@@ -142,8 +142,8 @@ describe('a turn as a trace', () => {
     transcript.prompt();
     transcript.reply({ tools: ['run_command'] });
     if (code !== undefined) transcript.error(code);
-    const run = record(transcript, { ending: { at: transcript.now, reason } });
-    expect({ errorType: run?.errorType, cancelled: run?.cancelled }).toEqual({
+    const trace = record(transcript, { ending: { at: transcript.now, reason } });
+    expect({ errorType: trace?.errorType, cancelled: trace?.cancelled }).toEqual({
       errorType: undefined,
       cancelled: undefined,
       ...outcome,
@@ -159,7 +159,7 @@ describe('a turn as a trace', () => {
     expect(record(transcript)?.errorType).toBe('server_error');
   });
 
-  it('is no run where the turn made no call', () => {
+  it('is no trace where the turn made no call', () => {
     const transcript = new Transcript(makeHome());
     transcript.prompt();
     transcript.system();
@@ -198,15 +198,15 @@ describe('a turn as a trace', () => {
     transcript.system();
     transcript.checkpoint();
     transcript.reply();
-    const run = record(transcript, { content: true });
-    expect(run?.inputMessages).toEqual([
+    const trace = record(transcript, { content: true });
+    expect(trace?.inputMessages).toEqual([
       { role: 'user', parts: [{ type: 'text', content: SECRETS.prompt }] },
     ]);
-    expect(run?.outputMessages).toEqual([
+    expect(trace?.outputMessages).toEqual([
       { role: 'assistant', parts: [{ type: 'text', content: SECRETS.reply }] },
     ]);
-    const [first, second] = models(run);
-    expect(first?.inputMessages).toEqual(run?.inputMessages);
+    const [first, second] = models(trace);
+    expect(first?.inputMessages).toEqual(trace?.inputMessages);
     expect(first?.outputMessages).toEqual([
       {
         role: 'assistant',
@@ -227,15 +227,15 @@ describe('a turn as a trace', () => {
         parts: [{ type: 'tool_call_response', response: expect.stringContaining(SECRETS.output) }],
       },
     ]);
-    expect(tools(run)[0]).toMatchObject({
+    expect(tools(trace)[0]).toMatchObject({
       arguments: { CommandLine: SECRETS.args },
       result: expect.stringContaining(SECRETS.output),
     });
-    const step = calls(run).find((call): call is StepRecord => call.type === 'step');
+    const step = calls(trace).find((call): call is StepRecord => call.type === 'step');
     expect(step?.outputMessages).toEqual([
       { role: 'assistant', parts: [{ type: 'text', content: SECRETS.summary }] },
     ]);
-    const text = JSON.stringify(run);
+    const text = JSON.stringify(trace);
     for (const never of [SECRETS.metadata, SECRETS.system, SECRETS.error, SECRETS.workspace])
       expect(text).not.toContain(never);
   });

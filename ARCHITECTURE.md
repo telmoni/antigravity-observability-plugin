@@ -14,7 +14,7 @@ The plugin records one trace per turn, from the person's prompt to the agent's l
 
 each with its times and whether it failed or was cancelled.
 
-The plugin reads Antigravity's own transcript after the fact. It adds no tool and no rule, and it never fails or slows a turn. Its one skill, whose full text Antigravity loads only when a prompt calls for it, tells the agent how to connect, tag and troubleshoot the plugin. What becomes of a run past ingest is Telmoni's.
+The plugin reads Antigravity's own transcript after the fact. It adds no tool and no rule, and it never fails or slows a turn. Its one skill, whose full text Antigravity loads only when a prompt calls for it, tells the agent how to connect, tag and troubleshoot the plugin. What becomes of a trace past ingest is Telmoni's.
 
 ## How Antigravity loads it
 
@@ -40,7 +40,7 @@ The plugin reads Antigravity's own transcript after the fact. It adds no tool an
   - The hook prints `{}`: a `Stop` answer with no `decision` lets the stop go on.
 - **Where it runs.** Antigravity's hooks docs list a plugin's `hooks.json` for the CLI alone. For the App and the IDE they list only a workspace's `.agents/hooks.json` and the global `~/.gemini/config/hooks.json`, without saying that either ignores a plugin's. The README says how to add the same command to the global file by its installed path. Where both run, the lock and the ids sent keep each turn to one run. Only the CLI has been checked live.
 - **Its marketplace.** Antigravity installs from one marketplace, `antigravity-plugins-official`, which `<name>@<marketplace>` alone names. Unlike Claude Code, it has no command that adds another, so this repository is no marketplace of its own. Until the plugin is listed, people install it by its GitHub address.
-- **What was checked against a live Antigravity**, the CLI 1.4.12 on 5 November 2026: the plugin's `Stop` handler runs in the plugin's folder, its payload's fields (below), and a run sent end to end, its tokens matching Antigravity's own count.
+- **What was checked against a live Antigravity**, the CLI 1.4.12 on 5 November 2026: the plugin's `Stop` handler runs in the plugin's folder, its payload's fields (below), and a trace sent end to end, its tokens matching Antigravity's own count.
 
 ## Processes: the hook and its worker
 
@@ -198,7 +198,7 @@ A conversation that ends while it still holds traces has no next stop of its own
 - only where its `destination` is the same, so traces go nowhere their own key did not send them;
 - stopping at the first Telmoni still cannot take.
 
-Past 200 kept traces the oldest go, and the log says how many. A key or endpoint changed under a conversation drops what it kept for the old one, logged.
+Past 200 kept traces the oldest go, and the log says how many. A key or endpoint changed under a conversation drops what it kept for the old one, logged. A kept record in a shape the plugin does not send is dropped as the state is read, and the log says how many.
 
 ## Shared code
 
