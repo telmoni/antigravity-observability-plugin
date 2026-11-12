@@ -8,6 +8,7 @@ import { traceIdOf } from '../src/record.js';
 import { TAGS_FILE } from '../src/shared/tags.js';
 import {
   CONVERSATION,
+  ENDPOINT,
   FakeTelmoni,
   KEY,
   SECRETS,
@@ -26,6 +27,7 @@ import {
 } from './helpers.js';
 
 const OTHER = '9f0e8d7c-6b5a-4433-8211-0ffeeddccbba';
+const ENV = { TELMONI_API_KEY: KEY, TELMONI_ENDPOINT: ENDPOINT };
 
 describe('the worker', () => {
   it('sends the turn a stop ended: its model calls with their tokens and its tool calls, in the conversation', async () => {
@@ -99,7 +101,7 @@ describe('the worker', () => {
       const transcript = new Transcript(home);
       transcript.turn(['run_command']);
       await runWorker(transcript.stop(), home, telmoni, {
-        TELMONI_API_KEY: KEY,
+        ...ENV,
         TELMONI_CAPTURE_CONTENT: '1',
       });
       expect(telmoni.text().includes(SECRETS.prompt), `content mode ${mode}`).toBe(sent);
@@ -259,7 +261,7 @@ describe('the worker', () => {
     // Another key's kept turns go nowhere they were not meant to.
     const elsewhere = new Transcript(home, 'aaaaaaaa-0000-4000-8000-000000000001');
     elsewhere.turn([]);
-    await runWorker(elsewhere.stop(), home, telmoni, { TELMONI_API_KEY: 'tm_another_key' });
+    await runWorker(elsewhere.stop(), home, telmoni, { ...ENV, TELMONI_API_KEY: 'tm_another_key' });
     telmoni.offline = false;
 
     const transcript = new Transcript(home);
@@ -288,14 +290,26 @@ describe('the worker', () => {
     expect([...telmoni.traces().keys()]).toEqual([traceIdOf(CONVERSATION, 4)]);
   });
 
+  it('sends nothing, and says so once, where there is no endpoint', async () => {
+    const home = makeHome();
+    const telmoni = new FakeTelmoni();
+    const transcript = new Transcript(home);
+    transcript.turn([]);
+    await runWorker(transcript.stop(), home, telmoni, { TELMONI_API_KEY: KEY });
+    transcript.turn([]);
+    await runWorker(transcript.stop(), home, telmoni, { TELMONI_API_KEY: KEY });
+    expect(telmoni.requests).toEqual([]);
+    expect(logOf(home).match(/no endpoint/g)).toHaveLength(1);
+  });
+
   it('reads the key file while it is the person’s own and shut to everyone else, with its endpoint and switches', async () => {
     const home = makeHome();
     const telmoni = new FakeTelmoni();
-    writeKeyFile(home, { apiKey: KEY, endpoint: 'https://telmoni.example.com' });
+    writeKeyFile(home, { apiKey: KEY, endpoint: 'https://file.example.com' });
     const transcript = new Transcript(home);
     transcript.turn([]);
     await runWorker(transcript.stop(), home, telmoni, {});
-    expect(telmoni.requests[0]?.url).toMatch(/^https:\/\/telmoni\.example\.com\//);
+    expect(telmoni.requests[0]?.url).toMatch(/^https:\/\/file\.example\.com\//);
     expect(telmoni.requests[0]?.headers.Authorization).toBe(`Bearer ${KEY}`);
   });
 
@@ -320,7 +334,7 @@ describe('the worker', () => {
     const transcript = new Transcript(home);
     transcript.turn([]);
     await runWorker(transcript.stop(), home, telmoni);
-    expect(telmoni.requests[0]?.url).toMatch(/^https:\/\/api\.telmoni\.com\//);
+    expect(telmoni.requests[0]?.url).toMatch(/^https:\/\/telmoni\.example\.com\//);
     expect(telmoni.requests[0]?.headers.Authorization).toBe(`Bearer ${KEY}`);
   });
 

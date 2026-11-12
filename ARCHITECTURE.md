@@ -161,7 +161,7 @@ The worker reads the settings at every hook (`shared/settings.ts`).
   - A field there but empty, or a switch neither `true` nor `false`, has the whole file passed over, logged once a conversation, and nothing is sent.
 - **Pairing.** A key never goes to an endpoint, nor takes a switch, named anywhere but beside it.
 - **Where it lives.** Antigravity gives a hook no folder or setting of its own, so the file sits in Antigravity's shared configuration folder, which the agent's own tools may not read.
-- **The endpoint.** The SDK's `Config` checks it. One it refuses is logged once a conversation, in the SDK's words, which name at most the host, and the turns wait for it to be fixed.
+- **The endpoint.** A self-hosted Telmoni's machine host, beside the key. There is no default: without one, as without a key, the worker logs once a conversation that there is none (`worker.ts`), and sends nothing; the bundled SDK's own default is never reached. The SDK's `Config` checks it. One it refuses is logged once a conversation, in the SDK's words, which name at most the host, and the turns wait for it to be fixed.
 
 ## State and the log
 

@@ -7552,6 +7552,7 @@ function after(turn) {
 var SENT_MAX = 500;
 var PENDING_MAX = 200;
 var NO_KEY = "no key: set TELMONI_API_KEY, or write ~/.gemini/config/telmoni.json";
+var NO_ENDPOINT = 'no endpoint: set TELMONI_ENDPOINT, or "endpoint" in the key file, to your self-hosted Telmoni';
 async function work(stop2, options) {
   const dir = stateDir(options.home);
   const log = (line) => writeLog(dir, `${shortId(stop2.conversationId)} ${line}`);
@@ -7590,6 +7591,7 @@ async function own(stop2, state, settings, options, dir, log) {
     if (settings.keyFileProblem !== void 0)
       return void once(`key file not read: ${settings.keyFileProblem}; nothing is sent`);
     if (settings.apiKey === void 0) return void once(NO_KEY);
+    if (settings.endpoint === void 0) return void once(NO_ENDPOINT);
     const destination = destinationOf(settings);
     if (state.destination !== void 0 && state.destination !== destination && state.pending.length > 0) {
       log(`${state.pending.length} kept turns dropped: the key or the endpoint changed`);

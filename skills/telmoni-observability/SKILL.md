@@ -24,18 +24,18 @@ The user sets the key from their own terminal; tell them how (below).
 
 ## Connect Telmoni
 
-The plugin needs a Telmoni project API key that holds the **ingest** scope (https://telmoni.com/docs/api/api-keys). Give the user one of two ways to set it.
+The plugin needs a Telmoni project API key that holds the **ingest** scope (https://github.com/telmoni/telmoni/blob/main/web/content/docs/api/api-keys.mdx), and the machine host of the user's self-hosted Telmoni: there is no default endpoint, and without one nothing is sent. Give the user one of two ways to set them, together.
 
-**A key file**, readable by them alone. Have them run this in their own terminal, then type `{"apiKey": "tm_…"}`, press Enter, then Ctrl-D:
+**A key file**, readable by them alone. Have them run this in their own terminal, then type `{"apiKey": "tm_…", "endpoint": "<its machine host>"}`, press Enter, then Ctrl-D:
 
 ```sh
 (umask 077 && cat > ~/.gemini/config/telmoni.json) && chmod 600 ~/.gemini/config/telmoni.json
 ```
 
 - The key never reaches their shell history.
-- For a self-hosted Telmoni, they add `"endpoint": "<its machine host>"` beside the key.
+- The endpoint is their self-hosted Telmoni's machine host, such as `https://telmoni.example.com`.
 
-**The environment** they start `agy` in: `TELMONI_API_KEY`, and `TELMONI_ENDPOINT` beside it for a self-hosted Telmoni. A key in the environment wins over the file.
+**The environment** they start `agy` in: `TELMONI_API_KEY`, and `TELMONI_ENDPOINT` beside it. A key in the environment wins over the file.
 
 The key file is read as each turn ends; a key in the environment, as `agy` starts. Turns that ended before the key was set are never sent: recording starts with the next turn to end.
 
@@ -79,6 +79,7 @@ Each log line names a conversation by the first 8 characters of its id:
 |---|---|
 | `sent <trace>` | Delivered. The trace is in Telmoni under the agent `antigravity`. |
 | `no key` | Set the key (above). |
+| `no endpoint: …` | Set the endpoint beside the key (above). |
 | `key file not read: <why>` | Fix what it says. Often `chmod 600 ~/.gemini/config/telmoni.json`, or JSON that does not parse. |
 | `endpoint refused: <why>` | The endpoint beside the key is not one the SDK sends to. |
 | `held <trace>: its turn is not over yet` | A background task was still running. The turn is sent when the conversation goes idle, or at the next prompt. |

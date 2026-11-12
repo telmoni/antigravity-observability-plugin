@@ -13,9 +13,9 @@
   "author": {
     "name": "Telmoni",
     "email": "hello@telmoni.com",
-    "url": "https://telmoni.com"
+    "url": "https://github.com/telmoni/telmoni"
   },
-  "homepage": "https://telmoni.com/docs/api/coding-agents",
+  "homepage": "https://github.com/telmoni/antigravity-observability-plugin",
   "repository": "https://github.com/telmoni/antigravity-observability-plugin",
   "license": "Apache-2.0",
   "keywords": ["observability", "monitoring", "telemetry", "tracing"]

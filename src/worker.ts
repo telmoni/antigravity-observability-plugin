@@ -68,6 +68,8 @@ export interface WorkOptions {
 type Log = (line: string) => void;
 
 const NO_KEY = 'no key: set TELMONI_API_KEY, or write ~/.gemini/config/telmoni.json';
+const NO_ENDPOINT =
+  'no endpoint: set TELMONI_ENDPOINT, or "endpoint" in the key file, to your self-hosted Telmoni';
 
 /** Everything one stop sets off; it never throws, every fault a line in the log. */
 export async function work(stop: Stop, options: WorkOptions): Promise<void> {
@@ -117,6 +119,7 @@ async function own(
     if (settings.keyFileProblem !== undefined)
       return void once(`key file not read: ${settings.keyFileProblem}; nothing is sent`);
     if (settings.apiKey === undefined) return void once(NO_KEY);
+    if (settings.endpoint === undefined) return void once(NO_ENDPOINT);
     const destination = destinationOf(settings);
     if (
       state.destination !== undefined &&

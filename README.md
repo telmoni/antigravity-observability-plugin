@@ -1,8 +1,8 @@
 # Telmoni for Antigravity
 
-Records each turn of your [Antigravity](https://antigravity.google) sessions in [Telmoni](https://telmoni.com) as a trace: the models it called and their tokens, the tools it used and the compactions it made, each with its times and whether it failed. Nothing you or the agent said, except the tags you set, unless you turn on **content** and the project keeps content: then each turn's conversation too.
+Records each turn of your [Antigravity](https://antigravity.google) sessions in [Telmoni](https://github.com/telmoni/telmoni) as a trace: the models it called and their tokens, the tools it used and the compactions it made, each with its times and whether it failed. Nothing you or the agent said, except the tags you set, unless you turn on **content** and the project keeps content: then each turn's conversation too.
 
-[Telmoni](https://github.com/telmoni/telmoni) is privacy-first, open-source monitoring for AI agents: with your sessions recorded, its [alerts](https://telmoni.com/docs/monitoring/alerts) tell you when a turn fails, loops on one tool or costs more than you set, and show you the turn that did it. Prompts stay in your process unless you turn content on.
+Telmoni is privacy-first, open-source monitoring for AI agents that you run on your own infrastructure ([self-hosting](https://github.com/telmoni/telmoni/blob/main/web/content/docs/self-host/overview.mdx)): with your sessions recorded, its [alerts](https://github.com/telmoni/telmoni/blob/main/web/content/docs/monitoring/alerts.mdx) tell you when a turn fails, loops on one tool or costs more than you set, and show you the turn that did it. Prompts stay in your process unless you turn content on.
 
 ## Install
 
@@ -39,19 +39,19 @@ Where the CLI runs both, each turn is still sent once.
 
 ## Configure
 
-The plugin needs a [project API key](https://telmoni.com/docs/api/api-keys) that holds the **ingest** scope. Antigravity gives a plugin's hooks no settings of their own, so the key goes in one of two places.
+The plugin needs a [project API key](https://github.com/telmoni/telmoni/blob/main/web/content/docs/api/api-keys.mdx) that holds the **ingest** scope, and the endpoint of your self-hosted Telmoni. Antigravity gives a plugin's hooks no settings of their own, so the key and the endpoint go together in one of two places.
 
-**A key file**, `~/.gemini/config/telmoni.json`, readable by you alone. Run this, then type `{"apiKey": "tm_…"}`, press Enter, then Ctrl-D. The key never reaches your shell history:
+**A key file**, `~/.gemini/config/telmoni.json`, readable by you alone. Run this, then type `{"apiKey": "tm_…", "endpoint": "https://telmoni.example.com"}`, press Enter, then Ctrl-D. The key never reaches your shell history:
 
 ```sh
 (umask 077 && cat > ~/.gemini/config/telmoni.json) && chmod 600 ~/.gemini/config/telmoni.json
 ```
 
-Add `"endpoint"` for a self-hosted Telmoni, which gives its machine host. The plugin reads the file only while it is yours and shut to everyone else. If anyone else can read it, the plugin sends nothing and says why in its log.
+`"endpoint"` is your self-hosted Telmoni's machine host. The plugin reads the file only while it is yours and shut to everyone else. If anyone else can read it, the plugin sends nothing and says why in its log.
 
-**The environment** the CLI starts in: `TELMONI_API_KEY`, and `TELMONI_ENDPOINT` beside it for a self-hosted Telmoni. A key in the environment comes first, and the file is then not read. A key is never sent to an endpoint named somewhere else.
+**The environment** the CLI starts in: `TELMONI_API_KEY`, and `TELMONI_ENDPOINT` beside it. A key in the environment comes first, and the file is then not read. A key is never sent to an endpoint named somewhere else.
 
-Left blank, the endpoint is `https://api.telmoni.com`. The key file is read as each turn ends, so a change takes effect from the next turn. A key in the environment is read as the CLI starts.
+There is no default endpoint: until one is set beside the key, the plugin sends nothing and its log says so once a conversation, as it does without a key. The key file is read as each turn ends, so a change takes effect from the next turn. A key in the environment is read as the CLI starts.
 
 ### Ask the agent
 
@@ -66,7 +66,7 @@ The plugin brings a skill, `telmoni-observability`, so you can ask the agent in 
 - each tool's arguments and output;
 - each compaction's summary.
 
-Telmoni keeps it only in a project whose [content mode](https://telmoni.com/docs/workspace/organizations-and-projects#a-projects-content-mode) is on. For any other project, nothing of the conversation leaves your machine.
+Telmoni keeps it only in a project whose [content mode](https://github.com/telmoni/telmoni/blob/main/web/content/docs/workspace/organizations-and-projects.mdx#a-projects-content-mode) is on. For any other project, nothing of the conversation leaves your machine.
 
 **Scrubbing secrets** and **personal data** are on unless you turn them off: `"scrubSecrets": false` or `"scrubPii": false` in the key file, or `TELMONI_SCRUB_SECRETS=0` or `TELMONI_SCRUB_PII=0` beside a key in the environment. Before content leaves, each match is replaced with a marker such as `[secret: aws_key]` or `[pii: email]`:
 
@@ -114,7 +114,7 @@ A tag that breaks a rule is dropped with a line in the log, and the turn is sent
 The hook runs as each turn ends and hands the work to a process of its own, so no turn waits on Telmoni. Its log is `~/.gemini/config/telmoni/hook.log`. Each line names a conversation by the start of its id, never anything said in it, and says one of:
 
 - a turn sent;
-- no key;
+- no key, or no endpoint;
 - a key file passed over, and why;
 - an endpoint the SDK refused;
 - a turn held because its conversation was still at work;
@@ -129,7 +129,7 @@ To remove the plugin, run `agy plugin uninstall telmoni-observability`, then del
 
 ## Developing
 
-[ARCHITECTURE.md](ARCHITECTURE.md) says how the plugin works, and how to build and test it from a checkout. To contribute, start with Telmoni's [contributing guide](https://telmoni.com/docs/contributing/introduction). At `0.0.0` nothing is released.
+[ARCHITECTURE.md](ARCHITECTURE.md) says how the plugin works, and how to build and test it from a checkout. To contribute, start with Telmoni's [contributing guide](https://github.com/telmoni/.github/blob/main/CONTRIBUTING.md). At `0.0.0` nothing is released.
 
 ## License
 

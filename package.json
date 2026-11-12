@@ -4,7 +4,7 @@
   "private": true,
   "description": "Telmoni's Antigravity plugin: each turn of an Antigravity session recorded as a trace, metadata unless you turn content on.",
   "license": "Apache-2.0",
-  "homepage": "https://telmoni.com/docs/api/coding-agents",
+  "homepage": "https://github.com/telmoni/antigravity-observability-plugin",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/telmoni/antigravity-observability-plugin.git"
